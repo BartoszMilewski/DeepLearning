@@ -38,7 +38,7 @@ VParaChain k mIn ns = ReplTypes k (ParaChain mIn ns)
 -- Interfaces
 -------------
 export
-{mIn : Nat} -> Show (Para m) where
+{mIn : Nat} -> Show (Para mIn) where
     show pa = "weight: " ++ show (weight pa) ++ " bias: " ++ show (bias pa) ++ "\n"
 
 -- Semigroup
@@ -150,7 +150,7 @@ initParaBlock mIn nOut s = unfoldl nOut (initPara mIn) s
 -- mIn    -> [mIn, n1] -> [n1, n2] -> ... [n l, n (l+1)]
 
 public export
-record Layout {l : Nat} where
+record Layout where
   constructor MkLayout
   ins : Nat
   layers : Vect (S l) Nat
@@ -173,7 +173,6 @@ MLParas ly = HVect (ParaChain ly.ins ly.layers)
 --    \ / \  /
 --       m
 
-
 export
 makeMLP : (ly : Layout) -> 
     PLens (MLParas ly) (V (ins ly)) (V (outs ly))
@@ -187,35 +186,24 @@ makeMLP (MkLayout mIn [nOut]) = MkPLens fwd' bwd'
     bwd' ([p], v, w) = let (p', v') = lr.bwd (p, v, w)
                        in ([p'], v')
 makeMLP (MkLayout mIn (n1 :: n2 :: ns)) =  MkPLens fwd' bwd'
-{-
-  let ly' = MkLayout n1 (n2 :: ns)
-      mlp' = makeMLP ly'
-      mlp = compose (layer n1 mIn) mlp'
-      fwd' = \(p1 :: ps, vm) => mlp.fwd ((p1, ps), vm)
-      bwd' = \(pmn1 :: pmns, s, a) =>
-        let ((pmn1', pmns'), s') = mlp.bwd ((pmn1, pmns), s, a)
-        in (pmn1' :: pmns', s')
-  in MkPLens fwd' bwd'
-      
--}
   where
     -- m -> [m, n1] -> [n1, n2] -> ... [n l, n (l+1)]
-    ly' : Layout
-    ly' = MkLayout n1 (n2 :: ns)
-    mlp' : PLens (MLParas ly') (V ly'.ins) (V (outs ly'))
-    mlp' = makeMLP ly'
-    mlp : PLens (ParaBlock mIn n1, MLParas ly')
+    Ly : Layout -- must be capitalized or the magic won't happen
+    Ly = MkLayout n1 (n2 :: ns)
+    mlp' : PLens (MLParas Ly) (V (ins Ly)) (V (outs Ly))
+    mlp' = makeMLP Ly
+    mlp : PLens (ParaBlock mIn n1, MLParas Ly)
             (V mIn)
             (V (last (n2 :: ns)))
-    mlp = compose (layer n1 mIn) (makeMLP ly')
+    mlp = compose (layer n1 mIn) mlp'
     fwd' : (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn) -> V (last (n1 :: n2 :: ns))
     fwd' (p1 :: ps, vm) = mlp.fwd ((p1, ps), vm)
-    mlp = compose (layer n1 mIn) (makeMLP ly')
     bwd' : (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn, V (last (n1 :: n2 :: ns))) ->
         (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn)
     bwd' (pmn1 :: pmns, s, a) =
         let ((pmn1', pmns'), s') = mlp.bwd ((pmn1, pmns), s, a)
         in (pmn1' :: pmns', s')
+
 
 -- Initialize parameters for an MLP
 -- ParaBlock mIn nOut, vector of nOut parameters, each mIn wide
@@ -242,60 +230,3 @@ loss gtruth = MkLens (\s => delta s gtruth)
   where
     backLoss : V n -> V n -> Double -> V n
     backLoss g s a =  map ( a *) (zipWith (-) s g)
-
-{-
-
-export
-makeMLP : (mIn : Nat) -> {l : Nat} -> (ns : Vect (S l) Nat) -> -- << architecture
-    PLens (HVect (ParaChain mIn ns)) (V mIn) (V (last ns))
-makeMLP mIn ([nOut]) = MkPLens fwd' bwd'
-  where
-    lr : PLens (ParaBlock mIn nOut) (V mIn) (V nOut)
-    lr = layer nOut mIn
-    fwd' : (HVect (ParaChain mIn [nOut]), V mIn) -> V (nOut)
-    fwd' ([p], v) = lr.fwd (p, v)
-    bwd' : (HVect (ParaChain mIn [nOut]), V mIn, V nOut) -> (HVect (ParaChain mIn [nOut]), V mIn)
-    bwd' ([p], v, w) = let (p', v') = lr.bwd (p, v, w)
-                       in ([p'], v')
-makeMLP mIn (n1 :: n2 :: ns) =  MkPLens fwd' bwd'
-  where
-    -- m -> [m, n1] -> [n1, n2] -> ... [n l, n (l+1)]
-    mlp : PLens (ParaBlock mIn n1, HVect (ParaChain n1 (n2 :: ns)))
-            (V mIn)
-            (V (last (n2 :: ns)))
-    mlp = compose (layer n1 mIn) (makeMLP n1 (n2 :: ns)) -- <<<<
-    fwd' : (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn) -> V (last (n1 :: n2 :: ns))
-    fwd' (p1 :: ps, vm) = mlp.fwd ((p1, ps), vm)
-    bwd' : (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn, V (last (n1 :: n2 :: ns))) ->
-        (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn)
-    bwd' (pmn1 :: pmns, s, a) =
-        let ((pmn1', pmns'), s') = mlp.bwd ((pmn1, pmns), s, a)
-        in (pmn1' :: pmns', s')
-
--- Initialize parameters for an MLP
--- ParaBlock mIn nOut, vector of nOut parameters, each mIn wide
-initParaChain : (mIn : Nat) -> {l : Nat} -> (ns : Vect (S l) Nat) -> --<< architecture
-    Stream Double -> (HVect (ParaChain mIn ns), Stream Double)
-initParaChain mIn ([nOut]) s = 
-  let (pb, s') = initParaBlock mIn nOut s
-  in ([pb], s')
-initParaChain mIn (n1 :: n2 :: ns) s = 
-  let (pb, s') = initParaBlock mIn n1 s 
-      (pbs, s'') = initParaChain n1 (n2 :: ns) s'
-  in (pb :: pbs, s'')
-
--- mean square error 0.5 * Sum (si - gi)^2
--- derivative: d/dsi = (si - gi)
-delta : V n -> V n -> Double
-delta s g = 0.5 * (sum $ map (\x => x * x) (zipWith (-) s g))
-
--- Sum of squares loss lens
-export
-loss : V n -> Lens (V n) Double
-loss gtruth = MkLens (\s => delta s gtruth)
-                     (\(s, a) => backLoss gtruth s a)
-  where
-    backLoss : V n -> V n -> Double -> V n
-    backLoss g s a =  map ( a *) (zipWith (-) s g)
-
--}
