@@ -1,0 +1,6 @@
+package DeepLearning
+version = 0.1.0
+authors = "Bartosz Milewski"
+main = Main
+executable = "Deep"
+sourcedir = "src"
