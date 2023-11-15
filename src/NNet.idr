@@ -180,33 +180,43 @@ makeMLP (MkLayout mIn [nOut]) = MkPLens fwd' bwd'
   where
     lr : PLens (ParaBlock mIn nOut) (V mIn) (V nOut)
     lr = layer nOut mIn
-    fwd' : (HVect (ParaChain mIn [nOut]), V mIn) -> V (nOut)
+    -- new layout with one layer
+    Ly : Layout -- must be capitalized or the magic won't happen
+    Ly = MkLayout mIn [nOut]
+
+    fwd' : (MLParas Ly, V mIn) -> V (nOut)
     fwd' ([p], v) = lr.fwd (p, v)
-    bwd' : (HVect (ParaChain mIn [nOut]), V mIn, V nOut) -> (HVect (ParaChain mIn [nOut]), V mIn)
+    bwd' : (MLParas Ly, V mIn, V nOut) -> (MLParas Ly, V mIn)
     bwd' ([p], v, w) = let (p', v') = lr.bwd (p, v, w)
                        in ([p'], v')
 makeMLP (MkLayout mIn (n1 :: n2 :: ns)) =  MkPLens fwd' bwd'
   where
     -- m -> [m, n1] -> [n1, n2] -> ... [n l, n (l+1)]
-    Ly : Layout -- must be capitalized or the magic won't happen
+    -- Layout for the recursive part
+    Ly : Layout
     Ly = MkLayout n1 (n2 :: ns)
     mlp' : PLens (MLParas Ly) (V (ins Ly)) (V (outs Ly))
-    mlp' = makeMLP Ly
-    mlp : PLens (ParaBlock mIn n1, MLParas Ly)
-            (V mIn)
-            (V (last (n2 :: ns)))
-    mlp = compose (layer n1 mIn) mlp'
-    fwd' : (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn) -> V (last (n1 :: n2 :: ns))
-    fwd' (p1 :: ps, vm) = mlp.fwd ((p1, ps), vm)
-    bwd' : (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn, V (last (n1 :: n2 :: ns))) ->
-        (HVect (ParaChain mIn (n1 :: n2 :: ns)), V mIn)
+    mlp' = makeMLP Ly --<< recurse
+    -- compose with the bottom layer
+    mlpComp : PLens (ParaBlock mIn n1, MLParas Ly)
+                    (V mIn)
+                    (V (last (n2 :: ns)))
+    mlpComp = compose (layer n1 mIn) mlp'
+    -- New layout for the composite
+    Ly' : Layout
+    Ly' = MkLayout mIn (n1 :: n2 :: ns)
+
+    fwd' : (MLParas Ly', V mIn) -> V (last (n1 :: n2 :: ns))
+    fwd' (p1 :: ps, vm) = mlpComp.fwd ((p1, ps), vm)
+    bwd' : (MLParas Ly', V mIn, V (last (n1 :: n2 :: ns))) ->
+           (MLParas Ly', V mIn)
     bwd' (pmn1 :: pmns, s, a) =
-        let ((pmn1', pmns'), s') = mlp.bwd ((pmn1, pmns), s, a)
-        in (pmn1' :: pmns', s')
+      let ((pmn1', pmns'), s') = mlpComp.bwd ((pmn1, pmns), s, a)
+      in (pmn1' :: pmns', s')
 
 
 -- Initialize parameters for an MLP
--- ParaBlock mIn nOut, vector of nOut parameters, each mIn wide
+
 initParaChain : (ly : Layout) ->
     Stream Double -> (MLParas ly, Stream Double)
 initParaChain (MkLayout mIn ([nOut])) s = 
