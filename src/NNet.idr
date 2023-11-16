@@ -153,9 +153,11 @@ public export
 data Layout : (ins : Nat) -> (layers : Vect (S m) Nat) -> Type where
   MkLayout : (ins : Nat) -> (layers : Vect (S m) Nat) -> Layout ins layers
 
+export
 inN : Layout i ls -> Nat
 inN (MkLayout ins _) = ins
 
+export
 outN : Layout i ls -> Nat
 outN (MkLayout _ layers) = last layers
 

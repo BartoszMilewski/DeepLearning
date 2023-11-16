@@ -19,13 +19,14 @@ rands = map normalize (random 42)
     normalize n = (fromInteger (cast n)) / fromInteger(2147483647)
 
 
-run : (l : Layout i o) -> Vect (Vect.last o) Double
-run ly iput =
-  let mlp   := makeMLP ly
-      paras := fst (initParaChain ly rands)
-   in mlp.fwd (paras, [1, 2, 3])
+run : (Layout i o) -> Vect i Double -> Vect (Vect.last o) Double
+run ly@(MkLayout ins layers) v =
+  let mlp   : PLens (MLParas ly) (V ins) (V (last layers)) := makeMLP ly
+      paras : MLParas ly := fst (initParaChain ly rands)
+   in mlp.fwd (paras, v)
 
 main : IO ()
 main = do
   let ly = MkLayout 3 [4,4,1]
-  printLn $ run ly
+  let inpt = [1, 2, 3]
+  printLn $ run ly inpt
