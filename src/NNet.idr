@@ -142,11 +142,11 @@ layer nOut mIn = composeL (branch nOut) (vecLens nOut (neuron mIn))
 
 -- Initialize parameters for a layer of n neurons, each with m inputs
 -- ParaBlock mIn nOut, vector of nOut parameters, each mIn wide
-initParaBlock : (mIn : Nat) -> (nOut : Nat) -> Stream Double -> (ParaBlock mIn nOut, Stream Double)
+initParaBlock : (mIn : Nat) -> (nOut : Nat) -> Stream Double -> 
+   (ParaBlock mIn nOut, Stream Double)
 initParaBlock mIn nOut s = unfoldl nOut (initPara mIn) s
 
-
--- The architecture is specified by number of inputs mIn and a list of layers ns
+-- The architecture is specified by number of inputs mIn and a list of l+1 layers ns
 -- mIn    -> [mIn, n1] -> [n1, n2] -> ... [n l, n (l+1)]
 
 public export
@@ -159,6 +159,7 @@ export
 outs : Layout -> Nat
 outs ly = last ly.layers
 
+public export
 MLParas : Layout -> Type
 MLParas ly = HVect (ParaChain ly.ins ly.layers)
 
@@ -217,6 +218,7 @@ makeMLP (MkLayout mIn (n1 :: n2 :: ns)) =  MkPLens fwd' bwd'
 
 -- Initialize parameters for an MLP
 
+export
 initParaChain : (ly : Layout) ->
     Stream Double -> (MLParas ly, Stream Double)
 initParaChain (MkLayout mIn ([nOut])) s = 
