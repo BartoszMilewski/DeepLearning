@@ -5,3 +5,6 @@
 # Idris 1
 *.ibc
 *.o
+src/build/exec/_tmpchez
+src/build/exec/_tmpchez_app/_tmpchez.ss
+src/build/exec/_tmpchez_app/libidris2_support.dylib

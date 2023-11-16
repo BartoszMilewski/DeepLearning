@@ -18,11 +18,14 @@ rands = map normalize (random 42)
     normalize : Int32 -> Double
     normalize n = (fromInteger (cast n)) / fromInteger(2147483647)
 
+
+run : (l : Layout i o) -> Vect (Vect.last o) Double
+run ly iput =
+  let mlp   := makeMLP ly
+      paras := fst (initParaChain ly rands)
+   in mlp.fwd (paras, [1, 2, 3])
+
 main : IO ()
 main = do
-  let ly : Layout = MkLayout 3 [4, 4, 1]
-  let mlp : PLens (MLParas ly) (V (ins ly)) (V (outs ly)) = makeMLP ly
-  let paras : MLParas ly = fst (initParaChain ly rands)
-  let iput : Vect 3 Double = [2.0, 3.0, -1.0]
-  print $ (mlp.fwd) (paras, iput) -- << Can't solve constraint between: 3 and ly .ins
-  putStrLn "Done"
+  let ly = MkLayout 3 [4,4,1]
+  printLn $ run ly

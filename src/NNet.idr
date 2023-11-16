@@ -150,18 +150,18 @@ initParaBlock mIn nOut s = unfoldl nOut (initPara mIn) s
 -- mIn    -> [mIn, n1] -> [n1, n2] -> ... [n l, n (l+1)]
 
 public export
-record Layout where
-  constructor MkLayout
-  ins : Nat
-  layers : Vect (S l) Nat
+data Layout : (ins : Nat) -> (layers : Vect (S m) Nat) -> Type where
+  MkLayout : (ins : Nat) -> (layers : Vect (S m) Nat) -> Layout ins layers
 
-export
-outs : Layout -> Nat
-outs ly = last ly.layers
+inN : Layout i ls -> Nat
+inN (MkLayout ins _) = ins
+
+outN : Layout i ls -> Nat
+outN (MkLayout _ layers) = last layers
 
 public export
-MLParas : Layout -> Type
-MLParas ly = HVect (ParaChain ly.ins ly.layers)
+MLParas : Layout ins layers -> Type
+MLParas (MkLayout ins layers) = HVect (ParaChain ins layers)
 
 -- Multi layer perceptron with m inputs and l+1 layers
 -- neuron count in each layer is given by (Vect l Nat)
@@ -175,14 +175,14 @@ MLParas ly = HVect (ParaChain ly.ins ly.layers)
 --       m
 
 export
-makeMLP : (ly : Layout) -> 
-    PLens (MLParas ly) (V (ins ly)) (V (outs ly))
+makeMLP : (ly : Layout ins layers) -> 
+    PLens (MLParas ly) (V ins) (V (last layers))
 makeMLP (MkLayout mIn [nOut]) = MkPLens fwd' bwd'
   where
     lr : PLens (ParaBlock mIn nOut) (V mIn) (V nOut)
     lr = layer nOut mIn
     -- new layout with one layer
-    Ly : Layout -- must be capitalized or the magic won't happen
+    Ly : Layout mIn [nOut] -- must be capitalized or the magic won't happen
     Ly = MkLayout mIn [nOut]
 
     fwd' : (MLParas Ly, V mIn) -> V (nOut)
@@ -194,9 +194,9 @@ makeMLP (MkLayout mIn (n1 :: n2 :: ns)) =  MkPLens fwd' bwd'
   where
     -- m -> [m, n1] -> [n1, n2] -> ... [n l, n (l+1)]
     -- Layout for the recursive part
-    Ly : Layout
+    Ly : Layout n1 (n2 :: ns)
     Ly = MkLayout n1 (n2 :: ns)
-    mlp' : PLens (MLParas Ly) (V (ins Ly)) (V (outs Ly))
+    mlp' : PLens (MLParas Ly) (V (inN Ly)) (V (outN Ly))
     mlp' = makeMLP Ly --<< recurse
     -- compose with the bottom layer
     mlpComp : PLens (ParaBlock mIn n1, MLParas Ly)
@@ -204,7 +204,7 @@ makeMLP (MkLayout mIn (n1 :: n2 :: ns)) =  MkPLens fwd' bwd'
                     (V (last (n2 :: ns)))
     mlpComp = compose (layer n1 mIn) mlp'
     -- New layout for the composite
-    Ly' : Layout
+    Ly' : Layout mIn (n1 :: n2 :: ns)
     Ly' = MkLayout mIn (n1 :: n2 :: ns)
 
     fwd' : (MLParas Ly', V mIn) -> V (last (n1 :: n2 :: ns))
@@ -219,7 +219,7 @@ makeMLP (MkLayout mIn (n1 :: n2 :: ns)) =  MkPLens fwd' bwd'
 -- Initialize parameters for an MLP
 
 export
-initParaChain : (ly : Layout) ->
+initParaChain : (ly : Layout ins layers) ->
     Stream Double -> (MLParas ly, Stream Double)
 initParaChain (MkLayout mIn ([nOut])) s = 
   let (pb, s') = initParaBlock mIn nOut s
