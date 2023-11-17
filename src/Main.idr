@@ -4,6 +4,7 @@ import Data.Vect
 import HVect
 import PLens
 import NNet
+import Perceptron
 
 -- Simple random number generator
 
