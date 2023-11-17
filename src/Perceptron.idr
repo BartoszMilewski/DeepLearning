@@ -4,38 +4,6 @@ import HVect
 import PLens
 import NNet
 
--- Chain of parameter blocks
--- Parameters for multi-layer perceptron with mIn inputs
--- A chain of types ParaBlock m n1 :: ParaBlock n1 n2 :: ParaBlock n2 n3 ...
-public export
-ParaChain : (mIn : Nat) -> (ns : Vect l Nat) -> Vect l Type
-ParaChain mIn [] = []
-ParaChain mIn (nOut' :: ns') = ParaBlock mIn nOut' :: ParaChain nOut' ns'
-
--- Chain of vectors of parameter blocks (for batches of perceptrons)
-0 VParaChain : (k : Nat) -> (mIn : Nat) -> {l : Nat} -> (ns : Vect l Nat) -> Vect l Type
-VParaChain k mIn ns = ReplTypes k (ParaChain mIn ns)
-
--------------
--- Interfaces
--------------
-
--- Proof that every type in ParaChain is a Monoid
-isMonoChain : {mIn : Nat} -> (ns : Vect l Nat) -> HVect (map Monoid (ParaChain mIn ns))
-isMonoChain Nil = Nil
-isMonoChain (n' :: ns') = MkMonoid neutral :: isMonoChain ns'
-
---  in (ParaChain mIn ns), all types are Monoid
-collectH : {k : Nat} -> {mIn : Nat} -> {l : Nat} -> {ns : Vect l Nat} -> 
-    HVect (VParaChain k mIn ns) -> HVect (ParaChain mIn ns)
-collectH hv = concatH {isMono = isMonoChain ns} hv
-
-export
-collectParas : {k : Nat} -> {mIn : Nat} -> {l : Nat} -> {ns : Vect l Nat} -> 
-    Vect k (HVect (ParaChain mIn ns)) -> HVect (ParaChain mIn ns)
-collectParas = collectH . transposeH
-
-
 -- The architecture is specified by number of inputs mIn and a list of l+1 layers ns
 -- mIn    -> [mIn, n1] -> [n1, n2] -> ... [n l, n (l+1)]
 
@@ -50,6 +18,35 @@ inN (MkLayout ins _) = ins
 export
 outN : Layout i ls -> Nat
 outN (MkLayout _ layers) = last layers
+
+-- Chain of parameter blocks
+-- Parameters for multi-layer perceptron with mIn inputs
+-- A chain of types ParaBlock m n1 :: ParaBlock n1 n2 :: ParaBlock n2 n3 ...
+public export
+ParaChain : (mIn : Nat) -> (ns : Vect l Nat) -> Vect l Type
+ParaChain mIn [] = []
+ParaChain mIn (nOut' :: ns') = ParaBlock mIn nOut' :: ParaChain nOut' ns'
+
+-- Chain of vectors of parameter blocks (for batches of perceptrons)
+0 VParaChain : (k : Nat) -> (mIn : Nat) -> (ns : Vect l Nat) -> Vect l Type
+VParaChain k mIn ns = ReplTypes k (ParaChain mIn ns)
+
+-- Proof that every type in ParaChain is a Monoid
+isMonoChain : {mIn : Nat} -> (ns : Vect l Nat) -> HVect (map Monoid (ParaChain mIn ns))
+isMonoChain Nil = Nil
+isMonoChain (n' :: ns') = MkMonoid neutral :: isMonoChain ns'
+
+--  in (ParaChain mIn ns), all types are Monoid
+collectH : {k : Nat} -> {mIn : Nat} -> {l : Nat} -> {ns : Vect l Nat} -> 
+    HVect (VParaChain k mIn ns) -> HVect (ParaChain mIn ns)
+collectH hv = concatH {isMono = isMonoChain ns} hv
+
+-- Notice: this should be rewritten to take a Layout!
+
+export
+collectParas : {k : Nat} -> {mIn : Nat} -> {l : Nat} -> {ns : Vect l Nat} -> 
+    Vect k (HVect (ParaChain mIn ns)) -> HVect (ParaChain mIn ns)
+collectParas = collectH . transposeH
 
 public export
 MLParas : Layout ins layers -> Type
