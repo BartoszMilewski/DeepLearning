@@ -22,8 +22,8 @@ rands = map normalize (random 42)
 
 run : (Layout i o) -> Vect i Double -> Vect (Vect.last o) Double
 run ly@(MkLayout ins l layers) v =
-  let mlp   : PLens (MLParas ly) (V ins) (V (last layers)) := makeMLP ly
-      paras : MLParas ly := fst (initParaChain ly rands)
+  let mlp   : PLens (HVect (ParaChain ly)) (V ins) (V (last layers)) := makeMLP ly
+      paras : HVect (ParaChain ly) := fst (initParaChain ly rands)
    in mlp.fwd (paras, v)
 
 main : IO ()
