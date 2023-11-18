@@ -50,7 +50,7 @@ export
 -- Replicate a vector of types
 -- map (Vect k) ts
 public export
-0 ReplTypes : (k : Nat) -> (ts : Vect l Type) -> Vect l Type
+0 ReplTypes : {l : Nat} -> (k : Nat) -> (ts : Vect l Type) -> Vect l Type
 ReplTypes k [] = []
 ReplTypes k (t' :: ts') = Vect k t' :: ReplTypes k ts'
 

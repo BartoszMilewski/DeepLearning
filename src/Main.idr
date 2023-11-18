@@ -21,13 +21,13 @@ rands = map normalize (random 42)
 
 
 run : (Layout i o) -> Vect i Double -> Vect (Vect.last o) Double
-run ly@(MkLayout ins layers) v =
+run ly@(MkLayout ins l layers) v =
   let mlp   : PLens (MLParas ly) (V ins) (V (last layers)) := makeMLP ly
       paras : MLParas ly := fst (initParaChain ly rands)
    in mlp.fwd (paras, v)
 
 main : IO ()
 main = do
-  let ly = MkLayout 3 [4,4,1]
+  let ly = MkLayout 3 2 [4,4,1]
   let inpt = [1, 2, 3]
   printLn $ run ly inpt
