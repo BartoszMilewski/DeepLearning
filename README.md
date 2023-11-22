@@ -1,2 +1,2 @@
 # DeepLearning
-Neural networks using lenses in Idris
+Neural networks using lenses in Haskell and Idris
