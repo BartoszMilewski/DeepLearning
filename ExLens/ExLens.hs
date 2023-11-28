@@ -2,8 +2,8 @@ module ExLens where
 
 -- Existential parametic lens
 
-data MLens p dp s ds a da = 
-  forall m . MLens ((p, s)  -> (m, a))  
+data ExLens p dp s ds a da = 
+  forall m . ExLens ((p, s)  -> (m, a))  
                    ((m, da) -> (dp, ds))
 
 -- For convenience, a lens with empty (unit) parameter
@@ -13,11 +13,11 @@ data Lens s ds a da =
 
 -- Accessors
 
-fwd :: MLens p dp s ds a da -> (p, s) -> a
-fwd (MLens f g) (p, s) = snd $ f (p, s)
+fwd :: ExLens p dp s ds a da -> (p, s) -> a
+fwd (ExLens f g) (p, s) = snd $ f (p, s)
 
-bwd :: MLens p dp s ds a da -> (p, s, da) -> (dp, ds)
-bwd (MLens f g) (p, s, da) = g (fst (f (p, s)), da)
+bwd :: ExLens p dp s ds a da -> (p, s, da) -> (dp, ds)
+bwd (ExLens f g) (p, s, da) = g (fst (f (p, s)), da)
 
 fwd0 :: Lens s ds a da -> s -> a
 fwd0 (Lens f g) s = snd $ f s
@@ -26,9 +26,9 @@ bwd0 :: Lens s ds a da -> (s, da) -> ds
 bwd0 (Lens f g) (s, da) = g (fst (f s), da)
 
 compose ::
-    MLens p dp s ds a da -> MLens q dq a da b db ->
-    MLens  (p, q) (dp, dq) s ds b db
-compose (MLens f1 g1) (MLens f2 g2) = MLens f3 g3
+    ExLens p dp s ds a da -> ExLens q dq a da b db ->
+    ExLens  (p, q) (dp, dq) s ds b db
+compose (ExLens f1 g1) (ExLens f2 g2) = ExLens f3 g3
   where
     f3 ((p, q), s) =
       let (m, a) = f1 (p, s)
@@ -42,9 +42,9 @@ compose (MLens f1 g1) (MLens f2 g2) = MLens f3 g3
 -- Convenient special cases
 
 composeR ::
-    MLens p dp s ds a da -> Lens a da b db ->
-    MLens  p dp s ds b db
-composeR (MLens f1 g1) (Lens f2 g2) = MLens f3 g3
+    ExLens p dp s ds a da -> Lens a da b db ->
+    ExLens  p dp s ds b db
+composeR (ExLens f1 g1) (Lens f2 g2) = ExLens f3 g3
   where
     f3 (p, s) =
       let (m, a) = f1 (p, s)
@@ -56,9 +56,9 @@ composeR (MLens f1 g1) (Lens f2 g2) = MLens f3 g3
       in (dp, ds)
 
 composeL ::
-    Lens s ds a da -> MLens q dq a da b db ->
-    MLens  q dq s ds b db
-composeL (Lens f1 g1) (MLens f2 g2) = MLens f3 g3
+    Lens s ds a da -> ExLens q dq a da b db ->
+    ExLens  q dq s ds b db
+composeL (Lens f1 g1) (ExLens f2 g2) = ExLens f3 g3
   where
     f3 (q, s) =
       let (m, a) = f1 s
@@ -71,9 +71,9 @@ composeL (Lens f1 g1) (MLens f2 g2) = MLens f3 g3
 
 -- A pair of lenses in parallel
 prodLens ::
-    MLens p dp s ds a da -> MLens p' dp' s' ds' a' da' ->
-    MLens (p, p') (dp, dp') (s, s') (ds, ds') (a, a') (da, da')
-prodLens (MLens f1 g1) (MLens f2 g2) = MLens  f3 g3
+    ExLens p dp s ds a da -> ExLens p' dp' s' ds' a' da' ->
+    ExLens (p, p') (dp, dp') (s, s') (ds, ds') (a, a') (da, da')
+prodLens (ExLens f1 g1) (ExLens f2 g2) = ExLens  f3 g3
   where
     f3 ((p, p'), (s, s')) = ((m, m'), (a, a'))
       where (m, a)   = f1 (p, s)
@@ -85,9 +85,9 @@ prodLens (MLens f1 g1) (MLens f2 g2) = MLens  f3 g3
 
 -- A cons function combines a lens with a (parallel) list of lenses
 consLens :: 
-    MLens p dp s ds a da -> MLens [p] [dp] [s] [ds] [a] [da] ->
-    MLens [p] [dp] [s] [ds] [a] [da]
-consLens (MLens f g) (MLens fs gs) = MLens fv gv 
+    ExLens p dp s ds a da -> ExLens [p] [dp] [s] [ds] [a] [da] ->
+    ExLens [p] [dp] [s] [ds] [a] [da]
+consLens (ExLens f g) (ExLens fs gs) = ExLens fv gv 
   where
     fv (p : ps, s : ss) = ((m, ms), a : as)
       where (m, a) = f (p, s)
@@ -98,8 +98,8 @@ consLens (MLens f g) (MLens fs gs) = MLens fv gv
 
 -- Vector lens, combines n identical lenses in parallel
 vecLens ::
-    Int -> MLens p dp s ds a da -> MLens [p] [dp] [s] [ds] [a] [da]
-vecLens 0 _ = MLens (const ([], [])) (const ([], []))
+    Int -> ExLens p dp s ds a da -> ExLens [p] [dp] [s] [ds] [a] [da]
+vecLens 0 _ = ExLens (const ([], [])) (const ([], []))
 vecLens n lns = consLens lns (vecLens (n - 1) lns)
 
 branch :: Monoid s => Int -> Lens s s [s] [s]
@@ -124,8 +124,8 @@ flatten = Lens f g
 -- A batch of lenses in parallel, sharing the same parameters
 -- Back propagation combines the parameters
 batchN :: (Monoid dp) =>
-    Int -> MLens p dp s ds a da -> MLens p dp [s] [ds] [a] [da]
-batchN n (MLens f g) = MLens fv gv
+    Int -> ExLens p dp s ds a da -> ExLens p dp [s] [ds] [a] [da]
+batchN n (ExLens f g) = ExLens fv gv
   where
     fv (p, ss) = unzip $ fmap f $ zip (replicate n p) ss
     gv (ms, das) = (mconcat dps, dss)
