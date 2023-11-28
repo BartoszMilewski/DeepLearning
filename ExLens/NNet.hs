@@ -1,4 +1,3 @@
-{-# language ScopedTypeVariables #-}
 module NNet where
 import ExLens
 

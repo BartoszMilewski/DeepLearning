@@ -132,6 +132,26 @@ batchN n (ExLens f g) = ExLens fv gv
       where -- g :: (m, da) -> (dp, ds)
         (dps, dss) = unzip $ fmap g $ zip ms das
 
+-- Rearrange vectors of parameters
+
+consParas :: ExLens  (p, [p]) (p, [p]) s ds a da -> ExLens  [p] [p] s ds a da
+consParas (ExLens f g) = ExLens f' g' 
+  where
+    f' (p : ps, s) = f ((p, ps), s)
+    g' (m, da) = 
+      let ((dp, dps), ds) = g (m, da)
+      in (dp : dps, ds)
+
+singleParas :: ExLens p dp s ds a da -> ExLens  [p] [dp] s ds a da
+singleParas (ExLens f g) = ExLens f' g' 
+  where
+    f' ([p], s) = f (p, s)
+    g' (m, da) = 
+      let (dp, ds) = g (m, da)
+      in ([dp], ds)
+
+
+
 test1 :: IO ()
 test1 = do 
   let sss = [[1, 2, 3], [4, 5, 6]]
