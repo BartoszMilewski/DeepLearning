@@ -1,5 +1,4 @@
-module MLens where
-import Distribution.Simple.Setup (GlobalFlags(globalVersion))
+module ExLens where
 
 -- Existential parametic lens
 
@@ -7,9 +6,24 @@ data MLens p dp s ds a da =
   forall m . MLens ((p, s)  -> (m, a))  
                    ((m, da) -> (dp, ds))
 
+-- For convenience, a lens with empty (unit) parameter
 data Lens s ds a da =
   forall m . Lens (s -> (m, a)) 
                   ((m, da) -> ds)
+
+-- Accessors
+
+fwd :: MLens p dp s ds a da -> (p, s) -> a
+fwd (MLens f g) (p, s) = snd $ f (p, s)
+
+bwd :: MLens p dp s ds a da -> (p, s, da) -> (dp, ds)
+bwd (MLens f g) (p, s, da) = g (fst (f (p, s)), da)
+
+fwd0 :: Lens s ds a da -> s -> a
+fwd0 (Lens f g) s = snd $ f s
+
+bwd0 :: Lens s ds a da -> (s, da) -> ds
+bwd0 (Lens f g) (s, da) = g (fst (f s), da)
 
 compose ::
     MLens p dp s ds a da -> MLens q dq a da b db ->
@@ -24,6 +38,8 @@ compose (MLens f1 g1) (MLens f2 g2) = MLens f3 g3
       let (dq, da) = g2 (n, db)
           (dp, ds) = g1 (m, da)
       in ((dp, dq), ds)
+
+-- Convenient special cases
 
 composeR ::
     MLens p dp s ds a da -> Lens a da b db ->
@@ -53,6 +69,7 @@ composeL (Lens f1 g1) (MLens f2 g2) = MLens f3 g3
           ds = g1 (m, da)
       in (dq, ds)
 
+-- A pair of lenses in parallel
 prodLens ::
     MLens p dp s ds a da -> MLens p' dp' s' ds' a' da' ->
     MLens (p, p') (dp, dp') (s, s') (ds, ds') (a, a') (da, da')
@@ -66,6 +83,7 @@ prodLens (MLens f1 g1) (MLens f2 g2) = MLens  f3 g3
         (dp, ds)   = g1 (m, da)
         (dp', ds') = g2 (m', da')
 
+-- A cons function combines a lens with a (parallel) list of lenses
 consLens :: 
     MLens p dp s ds a da -> MLens [p] [dp] [s] [ds] [a] [da] ->
     MLens [p] [dp] [s] [ds] [a] [da]
@@ -78,7 +96,48 @@ consLens (MLens f g) (MLens fs gs) = MLens fv gv
       where (dp, ds) = g (m, da)
             (dps, dss) = gs (ms, das)
 
+-- Vector lens, combines n identical lenses in parallel
 vecLens ::
     Int -> MLens p dp s ds a da -> MLens [p] [dp] [s] [ds] [a] [da]
 vecLens 0 _ = MLens (const ([], [])) (const ([], []))
 vecLens n lns = consLens lns (vecLens (n - 1) lns)
+
+branch :: Monoid s => Int -> Lens s s [s] [s]
+branch n = Lens (\s -> ((), replicate n s)) 
+                (\(_, ss) -> mconcat ss) -- pointwise <+>
+
+-- xs = [1, 2, 3, 4, 5, 6]
+-- vw = [[1, 2, 3], [4, 5, 6]]  m = 3 n = 2
+rechunk :: Int -> Int -> [a] -> [[a]]
+rechunk m 0 xs = []
+rechunk m n xs = take m xs : rechunk m (n - 1) (drop m xs)
+
+-- Lens (Vect n (Vect m s)) (Vect (n * m) s)
+-- Here the existential parameter is (Int, Int)
+flatten :: Lens [[s]] [[ds]] [s] [ds]
+flatten = Lens f g
+  where
+    f sss = ((length (head sss), length sss), concat sss)
+    -- (Vect n (Vect m s), Vect (n * m) s) -> (Vect n (Vect m s))
+    g ((m, n), ds) = rechunk m n ds
+
+-- A batch of lenses in parallel, sharing the same parameters
+-- Back propagation combines the parameters
+batchN :: (Monoid dp) =>
+    Int -> MLens p dp s ds a da -> MLens p dp [s] [ds] [a] [da]
+batchN n (MLens f g) = MLens fv gv
+  where
+    fv (p, ss) = unzip $ fmap f $ zip (replicate n p) ss
+    gv (ms, das) = (mconcat dps, dss)
+      where -- g :: (m, da) -> (dp, ds)
+        (dps, dss) = unzip $ fmap g $ zip ms das
+
+test1 :: IO ()
+test1 = do 
+  let sss = [[1, 2, 3], [4, 5, 6]]
+  let ss = [10, 11, 12, 13, 14, 15, 16]
+  putStrLn "flatten forward"
+  print $ fwd0 flatten sss
+  putStrLn "flatten backward"
+  print $ bwd0 flatten (sss, ss)
+  putStrLn ""
