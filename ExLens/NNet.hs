@@ -171,3 +171,14 @@ test4 = do
   let (dp, ds) = bwd nrn (p, in2, 1)
   print dp
   print ds
+
+test5 :: IO () 
+test5 = do
+    putStrLn "forward"
+    print $ fwd (affine 2) (Para [-1, 1] 0.1, [2, 30])
+    putStrLn $ show $ (-2) + 30 + 0.1
+    putStrLn "backward"
+    print $ bwd (affine 2) (Para [1.3, -1.4] 0.1, [21, 33], 1)
+    -- y = q1 * x1 + q2 * x2 + d
+    -- dy/dq = (x1, x2), dy/dd = 1, dy/dx = (q1, q2)
+    putStrLn $ show $ (Para [21, 33] 1, [1.3, -1.4])
