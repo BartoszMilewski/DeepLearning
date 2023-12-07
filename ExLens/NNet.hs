@@ -1,15 +1,19 @@
 module NNet where
 import ExLens
 
+-- Use existential lenses to create more complex neural networks
+
 type D = Double
 -- Ideally, a counted vector
 type V = [D]
 
+-- Parameters for a single neuron
 data Para = Para
   { weight :: V
   , bias   :: D
   } deriving Show
 
+-- Parameters for a layer of neurons
 type ParaBlock = [Para]
 
 -- Additive monoid
@@ -28,7 +32,8 @@ instance Monoid Para where
     mempty :: Para
     mempty = Para (repeat 0.0) 0.0
 
--- Vector space
+-- Parameters form a vector space, we need to scale them and add them
+
 class Monoid v => VSpace v where
     scale :: D -> v -> v
 
@@ -43,6 +48,8 @@ instance VSpace a => VSpace [a] where
 instance VSpace Para where
     scale :: D -> Para -> Para
     scale a p = Para (scale a (weight p)) (scale a (bias p))
+
+-- A simple linear lens: a scalar product of parameters and inputs
 
 linearL :: ExLens V V V V D D
 linearL = ExLens fw bw
@@ -91,7 +98,7 @@ affine m = ExLens fw bw
     bw ((w, s), da) = ( Para (scale da s) da  -- (da/dw, da/db)
                       , scale da w) -- da/ds
 
--- Neuron with m inputs and one output and tanh activation
+-- Neuron with m inputs and one output with tanh activation
 neuron :: Int -> ExLens Para Para V V D D
 neuron m = composeR (affine m) activ
 
@@ -102,14 +109,13 @@ initPara m stm = (Para w b, stm'')
     (w, stm') = splitAt m stm
     ([b], stm'') = splitAt 1 stm'
 
-
+-- A layer of nOut identical neurons, each with mIn inputs
 layer :: Int -> Int -> ExLens [Para] [Para] V V V V
 layer nOut mIn = composeL (branch nOut) (vecLens nOut (neuron mIn))
 
 -- Initialize a block of nOut parameters, each for a neuron with mIn inputs
 initParaBlock :: Int -> Int -> [D] -> ([Para], [D])
 initParaBlock mIn nOut stm = unfoldl nOut (initPara mIn) stm
-
 
 
 -- The loss lens, compares results with ground truth

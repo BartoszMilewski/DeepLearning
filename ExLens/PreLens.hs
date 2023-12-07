@@ -1,12 +1,15 @@
 module PreLens where
 
--- Pre-lens, parameterized by monoidal actions m and p
+-- Pre-lens, parameterized by 4 monoidal actions m dm and p dp
+-- Pre-lens category has objects <s, ds>
+-- Pre-lenses are morphism from <s, ds> to <a, da> 
+
 data PreLens m dm p dp s ds a da =
   PreLens ((p, s)   -> (m, a))
           ((dm, da) -> (dp, ds))
 
-unitPreLens :: PreLens () () () () s ds s ds
-unitPreLens = PreLens id id
+idPreLens :: PreLens () () () () s ds s ds
+idPreLens = PreLens id id
 
 -- Pre-lenses are composable
 preCompose ::
@@ -23,9 +26,11 @@ preCompose (PreLens f1 g1) (PreLens f2 g2) = PreLens f3 g3
           (dp, ds) = g1 (dm, da)
       in ((dp, dq), ds)
 
--- Existential lens is a trace of a pre-lens
+-- Existential lens is a "trace" of a pre-lens
 data ExLens p dp s ds a da = forall m. ExLens (PreLens m m p dp s ds a da)
 
+-- Composition of existential lenses follows
+-- the composition of pre-lenses
 compose ::
     ExLens p dp s ds a da -> ExLens q dq a da b db ->
     ExLens  (p, q) (dp, dq) s ds b db

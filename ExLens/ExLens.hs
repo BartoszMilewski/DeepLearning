@@ -25,6 +25,8 @@ fwd0 (Lens f g) s = snd $ f s
 bwd0 :: Lens s ds a da -> (s, da) -> ds
 bwd0 (Lens f g) (s, da) = g (fst (f s), da)
 
+-- Serial composition
+
 compose ::
     ExLens p dp s ds a da -> ExLens q dq a da b db ->
     ExLens  (p, q) (dp, dq) s ds b db
@@ -69,6 +71,8 @@ composeL (Lens f1 g1) (ExLens f2 g2) = ExLens f3 g3
           ds = g1 (m, da)
       in (dq, ds)
 
+-- Parallel composition 
+
 -- A pair of lenses in parallel
 prodLens ::
     ExLens p dp s ds a da -> ExLens p' dp' s' ds' a' da' ->
@@ -83,6 +87,16 @@ prodLens (ExLens f1 g1) (ExLens f2 g2) = ExLens  f3 g3
         (dp, ds)   = g1 (m, da)
         (dp', ds') = g2 (m', da')
 
+-- Vector lens, combines n identical lenses in parallel
+vecLens ::
+    Int -> ExLens p dp s ds a da -> ExLens [p] [dp] [s] [ds] [a] [da]
+vecLens 0 _ = ExLens (const ([], [])) (const ([], []))
+vecLens n lns = consLens lns (vecLens (n - 1) lns)
+
+branch :: Monoid s => Int -> Lens s s [s] [s]
+branch n = Lens (\s -> ((), replicate n s)) 
+                (\(_, ss) -> mconcat ss) -- pointwise <+>
+
 -- A cons function combines a lens with a (parallel) list of lenses
 consLens :: 
     ExLens p dp s ds a da -> ExLens [p] [dp] [s] [ds] [a] [da] ->
@@ -96,15 +110,7 @@ consLens (ExLens f g) (ExLens fs gs) = ExLens fv gv
       where (dp, ds) = g (m, da)
             (dps, dss) = gs (ms, das)
 
--- Vector lens, combines n identical lenses in parallel
-vecLens ::
-    Int -> ExLens p dp s ds a da -> ExLens [p] [dp] [s] [ds] [a] [da]
-vecLens 0 _ = ExLens (const ([], [])) (const ([], []))
-vecLens n lns = consLens lns (vecLens (n - 1) lns)
-
-branch :: Monoid s => Int -> Lens s s [s] [s]
-branch n = Lens (\s -> ((), replicate n s)) 
-                (\(_, ss) -> mconcat ss) -- pointwise <+>
+-- Helper functions for wiring networks
 
 -- xs = [1, 2, 3, 4, 5, 6]
 -- vw = [[1, 2, 3], [4, 5, 6]]  m = 3 n = 2
@@ -113,13 +119,17 @@ rechunk m 0 xs = []
 rechunk m n xs = take m xs : rechunk m (n - 1) (drop m xs)
 
 -- Lens (Vect n (Vect m s)) (Vect (n * m) s)
--- Here the existential parameter is (Int, Int)
+-- Here the existential parameter m is just (Int, Int)
 flatten :: Lens [[s]] [[ds]] [s] [ds]
 flatten = Lens f g
   where
     f sss = ((length (head sss), length sss), concat sss)
     -- (Vect n (Vect m s), Vect (n * m) s) -> (Vect n (Vect m s))
     g ((m, n), ds) = rechunk m n ds
+
+-- This is for training neural networks. Instead of running batches
+-- of training data in series, we can do it in parallel and accumulate
+-- the parameters for the next batch.
 
 -- A batch of lenses in parallel, sharing the same parameters
 -- Back propagation combines the parameters
