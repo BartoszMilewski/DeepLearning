@@ -56,7 +56,7 @@ instance TriProFunctor (PreLens a da) where
              bw' (dm', da) = bw (g dm', da)
 
 class TriProFunctor t => Trimbara t where
-    alpha :: t m dm p dp s ds -> t (n, m) (dn, dm) p dp (n, s) (dn, ds)
+    alpha :: t m dm p dp s ds -> t (m, n) (dm, dn) p dp (n, s) (dn, ds)
     beta  :: t m dm p dp (r, s) (dr, ds) -> t m dm (p, r) (dp, dr) s ds
 
 instance Trimbara (PreLens a da) where
@@ -66,9 +66,9 @@ instance Trimbara (PreLens a da) where
       where
         --fw' :: (p, (n, s)) -> ((n, m), a)
         fw' (p, (n, s)) = let (m, a) = fw (p, s)
-                          in ((n, m), a)
-        --bw' :: ((dn, dm), da) -> (dp, (dn, ds))
-        bw' ((dn, dm), da) = let (dp, ds) = bw (dm, da)
+                          in ((m, n), a)
+        --bw' :: ((dm, dn), da) -> (dp, (dn, ds))
+        bw' ((dm, dn), da) = let (dp, ds) = bw (dm, da)
                              in (dp, (dn, ds))
 
     beta :: forall m dm p dp s ds a da r dr .
@@ -85,7 +85,8 @@ instance Trimbara (PreLens a da) where
                     in ((dp, dr), ds)
 
 type TriLens a da m dm p dp s ds =
-    forall t. Trimbara t => forall r dr n dn. t n dn r dr a da -> t (n, m) (dn, dm) (r, p) (dr, dp) s ds
+    forall t. Trimbara t => forall r dr n dn. 
+      t n dn r dr a da -> t (n, m) (dn, dm) (r, p) (dr, dp) s ds
 
 -- t n dn r dr a da -> t (n, m) (dn, dm) (r, p) (dr, dp) s ds
 -- t () () () () a da -> t ((), m) ((), dm) ((), p) ((), dp) s ds
@@ -93,17 +94,12 @@ fromTamb :: forall a da m dm p dp s ds .
   TriLens a da m dm p dp s ds -> PreLens a da m dm p dp s ds
 fromTamb pab_pst = dimap'' lunit lunit_1 $ dimap' lunit_1 lunit $ pab_pst idPreLens 
 
-{-
--- Conversion from ExLens to BiLens
-toTamb :: ExLens a da q q' s ds -> BiLens q q' s ds a da
--- p r r' a da -> p (r, q) (r', q') s ds
--- p r r' (m, a) (m, da)
--- p r r' (q, s) (q', ds)
--- p (r, q) (r', q') s ds
-toTamb (ExLens fw bw) = beta . dimap fw bw . alpha
-
--}
-
+toTamb :: PreLens a da m dm p dp s ds -> TriLens a da m dm p dp s ds
+-- n dn r dr a da -> (n, m) (dn, dm) (r, p) (dr, dp) s ds
+-- alpha :: n dn r dr a da -> (n, m) (dn, dm) r dr (m, a) (dm, da)
+-- dimap fw bw :: (n, m) (dn, dm) r dr (p, s) (dp, ds)
+-- beta :: (n, m) (dn, dm) (r, p) (dr, dp) s ds
+toTamb (PreLens fw bw) = beta . dimap fw bw . alpha
 
 lunit_1 q = ((), q)
 lunit  :: ((), q) -> q
