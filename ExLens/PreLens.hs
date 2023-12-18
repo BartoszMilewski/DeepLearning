@@ -60,20 +60,21 @@ instance TriProFunctor (PreLens a da) where
 
 -- A generalization of Tambara modules with three pairs of arguments
 class TriProFunctor t => Trimbara t where
-    alpha :: t m dm p dp s ds -> t (m, n) (dm, dn) p dp (n, s) (dn, ds)
+    alpha :: t m dm p dp s ds -> t (n, m) (dn, dm) p dp (n, s) (dn, ds)
     beta  :: t m dm p dp (r, s) (dr, ds) -> t m dm (p, r) (dp, dr) s ds
 
 -- PreLens is an example of such a Tambara module
 instance Trimbara (PreLens a da) where
     -- fw :: (p, s)   -> (m, a)
     -- bw :: (dm, da) -> (dp, ds)
+    alpha :: PreLens a da m dm p dp s ds -> PreLens a da (n, m) (dn, dm) p dp (n, s) (dn, ds)
     alpha (PreLens fw bw) = PreLens fw' bw'
       where
-        --fw' :: (p, (n, s)) -> ((n, m), a)
+        --fw' :: (p, (n, s)) -> ((n, m)), a)
         fw' (p, (n, s)) = let (m, a) = fw (p, s)
-                          in ((m, n), a)
-        --bw' :: ((dm, dn), da) -> (dp, (dn, ds))
-        bw' ((dm, dn), da) = let (dp, ds) = bw (dm, da)
+                          in ((n, m), a)
+        --bw' :: ((dn, dm), da) -> (dp, (dn, ds))
+        bw' ((dn, dm), da) = let (dp, ds) = bw (dm, da)
                              in (dp, (dn, ds))
 
     beta :: forall m dm p dp s ds a da r dr .
@@ -96,13 +97,13 @@ instance Trimbara (PreLens a da) where
 -- This function polymorphic in Trimbara modules is equivalent to a PreLens
 type TriLens a da m dm p dp s ds =
     forall t. Trimbara t => forall r dr n dn. 
-      t n dn r dr a da -> t (n, m) (dn, dm) (r, p) (dr, dp) s ds
+      t n dn r dr a da -> t (m, n) (dm, dn) (r, p) (dr, dp) s ds
 
--- t n dn r dr a da -> t (n, m) (dn, dm) (r, p) (dr, dp) s ds
--- t () () () () a da -> t ((), m) ((), dm) ((), p) ((), dp) s ds
+-- t n dn r dr a da -> t (m, n) (dm, dn) (r, p) (dr, dp) s ds
+-- t () () () () a da -> t (m, ()) (dm, ()) ((), p) ((), dp) s ds
 fromTamb :: forall a da m dm p dp s ds .
   TriLens a da m dm p dp s ds -> PreLens a da m dm p dp s ds
-fromTamb pab_pst = dimap'' lunit lunit_1 $ dimap' lunit_1 lunit $ pab_pst idPreLens 
+fromTamb pab_pst = dimap'' runit runit_1 $ dimap' lunit_1 lunit $ pab_pst idPreLens 
 
 toTamb :: PreLens a da m dm p dp s ds -> TriLens a da m dm p dp s ds
 -- n dn r dr a da -> (n, m) (dn, dm) (r, p) (dr, dp) s ds
@@ -111,6 +112,19 @@ toTamb :: PreLens a da m dm p dp s ds -> TriLens a da m dm p dp s ds
 -- beta :: (n, m) (dn, dm) (r, p) (dr, dp) s ds
 toTamb (PreLens fw bw) = beta . dimap fw bw . alpha
 
+
+triCompose ::
+    TriLens a da m dm p dp s ds -> 
+    TriLens b db n dn q dq a da ->
+    TriLens b db (m, n) (dm, dn) (q, p) (dq, dp) s ds
+-- lba :: n' dn' r dr b db -> (n, n') (dn, dn') (r, q) (dr, dq) a da
+-- las :: (n, n') (dn, dn') (r, q) (dr, dq) a da -> (m, (n, n')) (dm, (dn, dn')) ((r, q), p) ((dr, dq), dp) s ds
+-- lbs :: n' dn' r dr b db -> ((m, n), n') ((dm, dn), dn') (r, (q, p)) (dr, (dq, dp)) s ds
+-- dimap'  :: (p' -> p) -> (dp -> dp') -> t m dm p dp s ds -> t m  dm  p' dp' s  ds
+-- dimap'' :: (m -> m') -> (dm' -> dm) -> t m dm p dp s ds -> t m' dm' p  dp  s  ds
+-- (m, (n, n')) (dm, (dn, dn')) ((r, q), p) ((dr, dq), dp) s ds ->
+-- ((m, n), n') ((dm, dn), dn') (r, (q, p)) (dr, (dq, dp)) s ds
+triCompose las lba = dimap' assoc_1 assoc . dimap'' assoc_1 assoc . las . lba
 
 lunit_1 q = ((), q)
 lunit  :: ((), q) -> q
@@ -127,3 +141,73 @@ assoc_1 (a, (b, c))= ((a, b), c)
 
 sym :: (a, b) -> (b, a)
 sym (a, b) = (b, a)
+
+-- Testing
+
+type D = Double
+-- Ideally, a counted vector
+type V = [D]
+
+-- Simple linear lens, scalar product of parameters and inputs
+linearL :: PreLens D D (V, V) (V, V) V V V V
+linearL = PreLens fw bw
+  where
+    fw :: (V, V) -> ((V, V), D)
+    -- a = Sum p * s
+    fw (p, s) = ((s, p), sum $ zipWith (*) p s)
+    -- da/dp = s, da/ds = p
+    bw :: ((V, V), D) -> (V, V)
+    bw ((s, p), da) = (fmap (da *) s  -- da/dp
+                      ,fmap (da *) p) -- da/ds
+
+-- Add bias to input
+biasL :: PreLens D D () () D D D D
+biasL = PreLens fw bw 
+  where 
+    fw :: (D, D) -> ((), D)
+    fw (p, s) = ((), p + s)
+    -- da/dp = 1, da/ds = 1
+    bw :: ((), D) -> (D, D)
+    bw (_, da) = (da, da)
+
+-- Non-linear activation lens using tanh
+activ :: PreLens D D D D () () D D
+activ = PreLens fw bw
+  where
+    -- a = tanh s
+    fw (_, s) = (s, tanh s)
+    -- da/ds = 1 + (tanh s)^2
+    bw (s, da)= ((), da * (1 - (tanh s)^2)) -- a * da/ds
+
+-- Convert both to TriLens
+-- p V D D -> p V V V
+linearT :: TriLens D D (V, V) (V, V) V V V V
+linearT = toTamb linearL
+-- p D D D -> p D D D
+biasT :: TriLens D D () () D D D D
+biasT = toTamb biasL
+
+-- Compose two TriLenses
+affineT :: TriLens D D ((V, V), ()) ((V, V), ()) (D, V) (D, V) V V
+affineT = triCompose linearT biasT 
+
+
+-- Turn the composition back to PreLens
+preAffine :: PreLens D D ((V, V), ()) ((V, V), ()) (D, V) (D, V) V V
+preAffine = fromTamb affineT
+
+affine :: ExLens D D (D, V) (D, V) V V
+affine = ExLens preAffine 
+
+fwd :: ExLens a da q q' s ds -> (q, s) -> a
+fwd (ExLens (PreLens f b)) = snd . f
+bwd :: ExLens a da q q' s ds -> (q, s, da) -> (q', ds)
+bwd (ExLens (PreLens f b)) (q, s, da)= b (fst (f (q, s)), da)
+
+testTriTamb :: IO ()
+testTriTamb = do
+    putStrLn "forward"
+    print $ fwd affine ((0.1, [-1, 1]), [2, 30])
+    putStrLn "backward"
+    -- (Para [1.3, -1.4] 0.1, [21, 33], 1)
+    print $ bwd affine ((0.1, [1.3, -1.4]), [21, 33], 1)
