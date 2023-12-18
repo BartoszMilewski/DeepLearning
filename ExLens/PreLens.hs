@@ -187,17 +187,29 @@ linearT = toTamb linearL
 biasT :: TriLens D D () () D D D D
 biasT = toTamb biasL
 
+activT :: TriLens D D D D () () D D
+activT = toTamb activ
+
 -- Compose two TriLenses
 affineT :: TriLens D D ((V, V), ()) ((V, V), ()) (D, V) (D, V) V V
 affineT = triCompose linearT biasT 
 
+-- Compose three TriLenses
+neuronT :: TriLens D D (((V, V), ()), D) (((V, V), ()), D) ((), (D, V)) ((), (D, V)) V V
+neuronT = triCompose (triCompose linearT biasT) activT
 
 -- Turn the composition back to PreLens
 preAffine :: PreLens D D ((V, V), ()) ((V, V), ()) (D, V) (D, V) V V
 preAffine = fromTamb affineT
 
+preNeuron :: PreLens D D (((V, V), ()), D) (((V, V), ()), D) ((), (D, V)) ((), (D, V)) V V
+preNeuron = fromTamb neuronT
+
 affine :: ExLens D D (D, V) (D, V) V V
 affine = ExLens preAffine 
+
+neuron :: ExLens D D ((), (D, V)) ((), (D, V)) V V
+neuron = ExLens preNeuron
 
 fwd :: ExLens a da q q' s ds -> (q, s) -> a
 fwd (ExLens (PreLens f b)) = snd . f
@@ -207,7 +219,11 @@ bwd (ExLens (PreLens f b)) (q, s, da)= b (fst (f (q, s)), da)
 testTriTamb :: IO ()
 testTriTamb = do
     putStrLn "forward"
-    print $ fwd affine ((0.1, [-1, 1]), [2, 30])
+    print $ fwd affine ((0.01, [-0.1, 0.1]), [2, 30])
     putStrLn "backward"
-    -- (Para [1.3, -1.4] 0.1, [21, 33], 1)
-    print $ bwd affine ((0.1, [1.3, -1.4]), [21, 33], 1)
+    print $ bwd affine ((0.1, [1.3, -1.4]), [0.21, 0.33], 1)
+
+    putStrLn "forward neuron"
+    print $ fwd neuron (((), (0.01, [-0.1, 0.1])), [2, 30])
+    putStrLn "backward neuron"
+    print $ bwd neuron (((), (0.1, [1.3, -1.4])), [0.21, 0.33], 1)
