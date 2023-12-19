@@ -16,8 +16,8 @@ preCompose ::
     PreLens b db (m, n) (dm, dn) (q, p) (dq, dp) s ds
 preCompose (PreLens f1 g1) (PreLens f2 g2) = PreLens f3 g3
   where
-    -- f3 = assoc_1 . second f2 . assoc . first sym . assoc_1 . second f1 . assoc
-    -- g3 = assoc_1 . second g1 . assoc . first sym . assoc_1 . second g2 . assoc
+    -- f3 = unAssoc . second f2 . assoc . first sym . unAssoc . second f1 . assoc
+    -- g3 = unAssoc . second g1 . assoc . first sym . unAssoc . second g2 . assoc
     f3 ((q, p), s) =
       let (m, a) = f1 (p, s)
           (n, b) = f2 (q, a)
@@ -105,8 +105,8 @@ type TriLens a da m dm p dp s ds =
 -- () () a -> (m, ()) ((), p) s
 fromTamb :: forall a da m dm p dp s ds .
   TriLens a da m dm p dp s ds -> PreLens a da m dm p dp s ds
-fromTamb pab_pst = dimapm runit runit_1 $ 
-                   dimapp lunit_1 lunit $ 
+fromTamb pab_pst = dimapm runit unRunit $ 
+                   dimapp unLunit lunit $ 
                    pab_pst idPreLens 
 
 toTamb :: PreLens a da m dm p dp s ds -> TriLens a da m dm p dp s ds
@@ -126,8 +126,8 @@ triCompose ::
 -- dimapp :: (p' -> p) -> (dp -> dp') -> m p s -> m  p' s
 -- dimapm :: (m -> m') -> (dm' -> dm) -> m p s -> m' p  s
 -- las . lba :: m1 p1 b -> (m, (n, m1)) ((p1, q), p) s
-triCompose las lba = dimapp assoc_1 assoc . 
-                     dimapm assoc_1 assoc . 
+triCompose las lba = dimapp unAssoc assoc . 
+                     dimapm unAssoc assoc . 
                      las . lba
 
 -- Parallel product of TriLenses
@@ -150,21 +150,17 @@ instance (Trimbara t) => Trimbara (PRight t m dm p dp s ds) where
     -- need  :: (m, m')  (p, p') (s, s') -> 
     --          (m, (m1, m')) (p, p') (s, (m1, s'))
     alpha = PRight . 
-        dimap (\(s, (m1, s')) -> (m1, (s, s')))
-              (\(dm1, (ds, ds')) -> (ds, (dm1, ds'))) .
-        dimapm (\(m1, (m, m'))->(m, (m1, m'))) 
-               (\(dm, (dm1, dm'))-> (dm1, (dm, dm'))) . 
+        dimap  jumpRight unJumpRight .
+        dimapm jumpRight unJumpRight . 
         alpha .  --  (m1, (m, m')) (p, p') (m1, (s, s'))
         unPRight --   (m, m')      (p, p')      (s, s')
 
     -- beta  :: m p (p1, s) -> m (p, p1) s
     -- need  :: (m, m') (p, p') (s, (p1, s')) -> (m, m') ((p, (p', p1)) (s, s')
     beta = PRight .
-      dimapp (\(p, (p', p1)) -> ((p, p'), p1))  
-             (\((dp, dp'), dp1) -> (dp, (dp', dp1))) .
+      dimapp unAssoc assoc .
       beta . -- (m, m') ((p, p'), p1) (s, s')
-      dimap (\(p1, (s, s')) -> (s, (p1, s'))) 
-            (\(s, (dp1, s')) -> (dp1, (s, s'))) . -- (m, m') (p, p') (p1, (s, s'))
+      dimap jumpRight unJumpRight . -- (m, m') (p, p') (p1, (s, s'))
       unPRight -- (m, m') (p, p') (s, (p1, s'))
 
 newtype PLeft t m' dm' p' dp' s' ds' m dm p dp s ds = PLeft { 
@@ -182,20 +178,16 @@ instance (Trimbara t) => Trimbara (PLeft t m dm p dp s ds) where
     -- need  :: (m, m')  (p, p') (s, s') -> 
     --          ((m1, m), m') (p, p') ((m1, s), s')
     alpha = PLeft .
-        dimap (\((m1, s), s') -> (m1, (s, s')))
-              (\(dm1, (ds, ds')) -> ((dm1, ds), ds')) .
-        dimapm  (\(m1, (m, m'))->((m1, m), m')) 
-                (\((dm1, dm), dm')-> (dm1, (dm, dm'))) . 
+        dimap assoc unAssoc .
+        dimapm  unAssoc assoc . 
                 alpha . -- (m1, (m, m')) (p, p') (m1, (s, s'))
                 unPLeft -- (m, m') (p, p') (s, s')
     -- beta :: m p (p1, s) -> m (p, p1) s
     -- need :: (m, m') (p, p') ((p1, s), s') -> (m, m') ((p, p1), p') (s, s')
     beta = PLeft .
-      dimapp (\((p, p1), p') -> ((p, p'), p1))  
-             (\((dp, dp'), dp1) -> ((dp, dp1), dp')) .
+      dimapp jumpLeft unJumpLeft .
       beta . -- (m, m') ((p, p'), p1), (s, s')
-      dimap  (\(p1, (s, s')) -> ((p1, s), s')) 
-             (\((dp1, s), s') -> (dp1, (s, s'))) . -- (m, m') (p, p') (p1, (s, s'))
+      dimap unAssoc assoc . -- (m, m') (p, p') (p1, (s, s'))
       unPLeft -- (m, m') (p, p') ((p1, s), s')
 
 prodLens :: TriLens a da m dm q  dq  s  ds -> 
@@ -206,30 +198,42 @@ prodLens :: TriLens a da m dm q  dq  s  ds ->
     -- l3 :: t  m3            r3           (a, a') -> 
     --       t ((m, m'), m3) (r3, (q, q')) (s, s')
 prodLens l1 l2 = 
-    dimapp assoc_1 assoc . 
-    dimapm assoc_1 assoc . 
-    dimapp (second lunit_1) (second lunit) .
-    dimapm (first runit) (first runit_1) .
+    dimapp unAssoc assoc . 
+    dimapm unAssoc assoc . 
+    dimapp (second unLunit) (second lunit) .
+    dimapm (first runit) (first unRunit) .
     unPRight . l2 . PRight . unPLeft . l1 . PLeft .
-    dimapp runit runit_1 .
-    dimapm lunit_1 lunit
+    dimapp runit unRunit .
+    dimapm unLunit lunit
 
 -- Monoidal category structure maps
-lunit_1 q = ((), q)
+unLunit q = ((), q)
 lunit  :: ((), q) -> q
 lunit ((), q) = q
-runit_1 :: q -> (q, ())
-runit_1 q = (q, ())
+unRunit :: q -> (q, ())
+unRunit q = (q, ())
 runit  :: (q, ()) -> q
 runit (q, ()) = q
 
 assoc :: ((a, b), c) -> (a, (b, c))
 assoc ((a, b), c) = (a, (b, c))
-assoc_1 :: (a, (b, c)) -> ((a, b), c)
-assoc_1 (a, (b, c))= ((a, b), c)
+unAssoc :: (a, (b, c)) -> ((a, b), c)
+unAssoc (a, (b, c))= ((a, b), c)
 
 sym :: (a, b) -> (b, a)
 sym (a, b) = (b, a)
+
+jumpRight :: (x, (b, c)) -> (b, (x, c))
+jumpRight (x, (b, c)) = (b, (x, c))
+
+unJumpRight :: (b, (x, c)) -> (x, (b, c))
+unJumpRight (b, (x, c)) = (x, (b, c))
+
+jumpLeft :: ((a, b), x) -> ((a, x), b)
+jumpLeft ((a, b), x) = ((a, x), b)
+
+unJumpLeft :: ((a, x), b) -> ((a, b), x)
+unJumpLeft ((a, x), b) = ((a, b), x)
 
 -- Testing
 
@@ -292,7 +296,7 @@ preAffine :: PreLens D D ((V, V), ()) ((V, V), ()) (D, V) (D, V) V V
 preAffine = fromTamb affineT
 
 preNeuron :: PreLens D D (((V, V), ()), D) (((V, V), ()), D) (D, V) (D, V) V V
-preNeuron = dimapp lunit_1 lunit (fromTamb neuronT)
+preNeuron = dimapp unLunit lunit (fromTamb neuronT)
 
 affine :: ExLens D D (D, V) (D, V) V V
 affine = ExLens preAffine 
