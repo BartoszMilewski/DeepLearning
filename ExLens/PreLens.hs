@@ -42,7 +42,7 @@ compose (ExLens pl) (ExLens pl') = ExLens $ preCompose pl pl'
 
 
 
--- A profunctor in three pairs of arguments
+-- A profunctor in three pairs of arguments (Notice: the polarities of m dm are flipped)
 class TriProFunctor t where
     dimap   :: (s' -> s) -> (ds -> ds') -> t m dm p dp s ds -> t m  dm  p  dp  s' ds'
     dimapp  :: (p' -> p) -> (dp -> dp') -> t m dm p dp s ds -> t m  dm  p' dp' s  ds
@@ -62,7 +62,9 @@ instance TriProFunctor (PreLens a da) where
 
 -- A generalization of Tambara modules with three pairs of arguments
 class TriProFunctor t => Trimbara t where
+    -- shorthand: alpha :: m p s -> (n, m) p (n, s)
     alpha :: t m dm p dp s ds -> t (n, m) (dn, dm) p dp (n, s) (dn, ds)
+    -- shorthand: beta  :: m p (r, s) -> m (p, r) s
     beta  :: t m dm p dp (r, s) (dr, ds) -> t m dm (p, r) (dp, dr) s ds
 
 -- PreLens is an example of such a Tambara module
@@ -93,35 +95,36 @@ instance Trimbara (PreLens a da) where
                     in ((dp, dr), ds)
 ----------
 -- This function polymorphic in Trimbara modules is equivalent to a PreLens
+-- shorthand: n r a -> (m, n) (r, p) s
 ----------
 type TriLens a da m dm p dp s ds =
     forall t. Trimbara t => forall r dr n dn. 
       t n dn r dr a da -> t (m, n) (dm, dn) (r, p) (dr, dp) s ds
 
--- t n dn r dr a da -> t (m, n) (dm, dn) (r, p) (dr, dp) s ds
--- t () () () () a da -> t (m, ()) (dm, ()) ((), p) ((), dp) s ds
+-- n r a -> t (m, n)(r, p) s
+-- () () a -> (m, ()) ((), p) s
 fromTamb :: forall a da m dm p dp s ds .
   TriLens a da m dm p dp s ds -> PreLens a da m dm p dp s ds
 fromTamb pab_pst = dimapm runit runit_1 $ dimapp lunit_1 lunit $ pab_pst idPreLens 
 
 toTamb :: PreLens a da m dm p dp s ds -> TriLens a da m dm p dp s ds
--- n dn r dr a da -> (n, m) (dn, dm) (r, p) (dr, dp) s ds
--- alpha :: n dn r dr a da -> (n, m) (dn, dm) r dr (m, a) (dm, da)
--- dimap fw bw :: (n, m) (dn, dm) r dr (p, s) (dp, ds)
--- beta :: (n, m) (dn, dm) (r, p) (dr, dp) s ds
+-- n r a -> (n, m) (r, p) s
+-- alpha :: n r a -> (n, m) r (m, a)
+-- dimap fw bw :: (n, m) r (p, s)
+-- beta :: (n, m) (r, p) s
 toTamb (PreLens fw bw) = beta . dimap fw bw . alpha
 
 triCompose ::
     TriLens a da m dm p dp s ds -> 
     TriLens b db n dn q dq a da ->
     TriLens b db (m, n) (dm, dn) (q, p) (dq, dp) s ds
--- lba :: n' dn' r dr b db -> (n, n') (dn, dn') (r, q) (dr, dq) a da
--- las :: (n, n') (dn, dn') (r, q) (dr, dq) a da -> (m, (n, n')) (dm, (dn, dn')) ((r, q), p) ((dr, dq), dp) s ds
--- lbs :: n' dn' r dr b db -> ((m, n), n') ((dm, dn), dn') (r, (q, p)) (dr, (dq, dp)) s ds
--- dimapp  :: (p' -> p) -> (dp -> dp') -> t m dm p dp s ds -> t m  dm  p' dp' s  ds
--- dimapm :: (m -> m') -> (dm' -> dm) -> t m dm p dp s ds -> t m' dm' p  dp  s  ds
--- (m, (n, n')) (dm, (dn, dn')) ((r, q), p) ((dr, dq), dp) s ds ->
--- ((m, n), n') ((dm, dn), dn') (r, (q, p)) (dr, (dq, dp)) s ds
+-- lba :: n' r b -> (n, n') (r, q) a
+-- las :: (n, n') (r, q) a -> (m, (n, n')) ((r, q), p) s
+-- lbs :: n' r b -> ((m, n), n') (r, (q, p)) s
+-- dimapp :: (p' -> p) -> (dp -> dp') -> m p s -> m  p' s
+-- dimapm :: (m -> m') -> (dm' -> dm) -> m p s -> m' p  s
+-- (m, (n, n')) ((r, q), p) s ->
+-- ((m, n), n') (r, (q, p)) s
 triCompose las lba = dimapp assoc_1 assoc . dimapm assoc_1 assoc . las . lba
 
 -- Parallel product of TriLenses
@@ -129,7 +132,7 @@ triCompose las lba = dimapp assoc_1 assoc . dimapm assoc_1 assoc . las . lba
 -- Show that a TriTambara of products is a TriTambara in both sides of the product
 
 -- Rearrange the wires for Haskell
-data PRight t m dm p dp s ds m' dm' p' dp' s' ds' = PRight { 
+newtype PRight t m dm p dp s ds m' dm' p' dp' s' ds' = PRight { 
   unPRight :: t (m, m') (dm, dm') (p, p') (dp, dp') (s, s') (ds, ds') }
 
 -- It's a TriProfunctor in these variables
@@ -140,23 +143,26 @@ instance (TriProFunctor t) => TriProFunctor (PRight t m dm p dp s ds) where
 
 -- It's a TriTambara in thes variables
 instance (Trimbara t) => Trimbara (PRight t m dm p dp s ds) where
-    -- alpha :: t m dm p dp s ds -> t (n, m) (dn, dm) p dp (n, s) (dn, ds)
-    -- alpha :: t (m, m') (dm, dm') (p, p') (dp, dp') (s, s') (ds, ds') -> 
-      -- t (n, (m, m')) (dn, (dm, dm')) (p, p') (dp, dp') (n, (s, s')) (dn, (ds, ds'))
-    alpha (PRight t) = PRight $ 
+    -- alpha :: m p s -> (n, m) p (n, s)
+    -- need  :: (m, m')      (p, p') (s, s') -> 
+    --          (n, (m, m')) (p, p') (n, (s, s'))
+    alpha = PRight . 
         dimap (\(s, (n, s')) -> (n, (s, s')))
-              (\(dn, (ds, ds')) -> (ds, (dn, ds'))) $ 
+              (\(dn, (ds, ds')) -> (ds, (dn, ds'))) .
         dimapm (\(n, (m, m'))->(m, (n, m'))) 
-                (\(dm, (dn, dm'))-> (dn, (dm, dm'))) $ alpha t  
-    -- beta  :: t m dm p dp (r, s) (dr, ds) -> t m dm (p, r) (dp, dr) s ds
-    beta (PRight t) = PRight $ 
+               (\(dm, (dn, dm'))-> (dn, (dm, dm'))) . 
+        alpha . 
+        unPRight
+    -- beta  :: m p (r, s) -> m (p, r) s
+    beta = PRight .
       dimapp (\(q, (q', q1)) -> ((q, q'), q1))  
-             (\((r, r'), q1') -> (r, (r', q1'))) $
-      beta $
+             (\((r, r'), q1') -> (r, (r', q1'))) .
+      beta .
       dimap (\(q1, (a, a')) -> (a, (q1, a'))) 
-            (\(b, (q1', b')) -> (q1', (b, b'))) t
+            (\(b, (q1', b')) -> (q1', (b, b'))) .
+      unPRight
 
-data PLeft t m' dm' p' dp' s' ds' m dm p dp s ds = PLeft { 
+newtype PLeft t m' dm' p' dp' s' ds' m dm p dp s ds = PLeft { 
   unPLeft :: t (m, m') (dm, dm') (p, p') (dp, dp') (s, s') (ds, ds') }
 
 -- It's a TriProfunctor in these variables
@@ -165,25 +171,25 @@ instance (TriProFunctor t) => TriProFunctor (PLeft t m dm p dp s ds) where
     dimapp f g (PLeft t) = PLeft $ dimapp (first f) (first g) t
     dimapm f g (PLeft t) = PLeft $ dimapm (first f) (first g) t
 
--- It's a TriTambara in thes variables
+-- It's a TriTambara in these variables
 instance (Trimbara t) => Trimbara (PLeft t m dm p dp s ds) where
-    -- alpha :: t m dm p dp s ds -> t (n, m) (dn, dm) p dp (n, s) (dn, ds)
-    -- alpha :: t (m, m') (dm, dm') (p, p') (dp, dp') (s, s') (ds, ds') -> 
-      -- t (n, (m, m')) (dn, (dm, dm')) (p, p') (dp, dp') (n, (s, s')) (dn, (ds, ds'))
-    alpha (PLeft t) = PLeft $ 
+    -- alpha :: m p s -> (n, m) p (n, s)
+    -- alpha :: (m, m') (p, p') (s, s') -> 
+      -- (n, (m, m')) (p, p') (n, (s, s'))
+    alpha = PLeft .
         dimap (\((n, s), s') -> (n, (s, s')))
-              (\(dn, (ds, ds')) -> ((dn, ds), ds')) $ 
+              (\(dn, (ds, ds')) -> ((dn, ds), ds')) .
         dimapm (\(n, (m, m'))->((n, m), m')) 
-                (\((dn, dm), dm')-> (dn, (dm, dm'))) $ alpha t  
-    -- beta  :: t m dm p dp (r, s) (dr, ds) -> t m dm (p, r) (dp, dr) s ds
-    beta (PLeft t) = PLeft $ 
+                (\((dn, dm), dm')-> (dn, (dm, dm'))) . 
+                alpha . unPLeft
+    -- beta  :: m p (r, s) -> t m (p, r) s
+    beta = PLeft .
       dimapp (\((q, q1), q') -> ((q, q'), q1))  
-             (\((r, r'), q1') -> ((r, q1'), r')) $
-      beta $
+             (\((r, r'), q1') -> ((r, q1'), r')) .
+      beta .
       dimap  (\(q1, (a, a')) -> ((q1, a), a')) 
-             (\((q1', b), b') -> (q1', (b, b'))) t
-
--- t n dn r dr a da -> t (m, n) (dm, dn) (r, p) (dr, dp) s ds
+             (\((q1', b), b') -> (q1', (b, b'))) .
+      unPLeft
 
 prodLens :: TriLens a da m dm q  dq  s  ds -> 
             TriLens a' da' m' dm' q' dq' s' ds' ->
