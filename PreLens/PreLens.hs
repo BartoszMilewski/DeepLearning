@@ -1,4 +1,3 @@
-{-# language ScopedTypeVariables #-}
 module PreLens where
 import Data.Bifunctor ( Bifunctor(second, first, bimap) )
 
@@ -44,19 +43,19 @@ compose (ExLens pl) (ExLens pl') = ExLens $ preCompose pl pl'
 
 -- A profunctor in three pairs of arguments (Notice: the polarities of m dm are flipped)
 class TriProFunctor t where
-    dimap   :: (s' -> s) -> (ds -> ds') -> t m dm p dp s ds -> t m  dm  p  dp  s' ds'
-    dimapp  :: (p' -> p) -> (dp -> dp') -> t m dm p dp s ds -> t m  dm  p' dp' s  ds
-    dimapm  :: (m -> m') -> (dm' -> dm) -> t m dm p dp s ds -> t m' dm' p  dp  s  ds
+    dimapS  :: (s' -> s) -> (ds -> ds') -> t m dm p dp s ds -> t m  dm  p  dp  s' ds'
+    dimapP  :: (p' -> p) -> (dp -> dp') -> t m dm p dp s ds -> t m  dm  p' dp' s  ds
+    dimapM  :: (m -> m') -> (dm' -> dm) -> t m dm p dp s ds -> t m' dm' p  dp  s  ds
 
 -- PreLens is a profunctor in three pairs of arguments
 instance TriProFunctor (PreLens a da) where
-     dimap f g (PreLens fw bw) = PreLens fw' bw'
+     dimapS f g (PreLens fw bw) = PreLens fw' bw'
        where fw' (p, s') = fw (p, f s')
              bw' (dm, da) = second g $ bw (dm, da)
-     dimapp f g (PreLens fw bw) = PreLens fw' bw'
+     dimapP f g (PreLens fw bw) = PreLens fw' bw'
        where fw' (p', s) = fw (f p', s)
              bw' (dm, da) = first g $ bw (dm, da)
-     dimapm f g (PreLens fw bw) = PreLens fw' bw'
+     dimapM f g (PreLens fw bw) = PreLens fw' bw'
        where fw' (p, s) = first f $ fw (p, s)
              bw' (dm', da) = bw (g dm', da)
 
@@ -105,16 +104,16 @@ type TriLens a da m dm p dp s ds =
 -- () () a -> (m, ()) ((), p) s
 fromTamb :: forall a da m dm p dp s ds .
   TriLens a da m dm p dp s ds -> PreLens a da m dm p dp s ds
-fromTamb pab_pst = dimapm runit unRunit $ 
-                   dimapp unLunit lunit $ 
+fromTamb pab_pst = dimapM runit unRunit $ 
+                   dimapP unLunit lunit $ 
                    pab_pst idPreLens 
 
 toTamb :: PreLens a da m dm p dp s ds -> TriLens a da m dm p dp s ds
 -- want  :: m1 p1 a -> (m, m1) (p1, p) s
 -- alpha :: m1 p1 a -> (m, m1) p1 (m, a)
--- dimap fw bw :: ->   (m, m1) p1 (p, s)
+-- dimapS fw bw :: ->   (m, m1) p1 (p, s)
 -- beta  ::       ->   (m, m1) (p1, p) s
-toTamb (PreLens fw bw) = beta . dimap fw bw . alpha
+toTamb (PreLens fw bw) = beta . dimapS fw bw . alpha
 
 triCompose ::
     TriLens a da m dm p dp s ds -> 
@@ -123,11 +122,11 @@ triCompose ::
 -- lba :: m1 p1 b -> (n, m1) (p1, q) a
 -- las :: (n, m1) (p1, q) a -> (m, (n, m1)) ((p1, q), p) s
 -- lbs :: m1 p1 b -> ((m, n), m1) (p1, (q, p)) s
--- dimapp :: (p' -> p) -> (dp -> dp') -> m p s -> m  p' s
--- dimapm :: (m -> m') -> (dm' -> dm) -> m p s -> m' p  s
+-- dimapP :: (p' -> p) -> (dp -> dp') -> m p s -> m  p' s
+-- dimapM :: (m -> m') -> (dm' -> dm) -> m p s -> m' p  s
 -- las . lba :: m1 p1 b -> (m, (n, m1)) ((p1, q), p) s
-triCompose las lba = dimapp unAssoc assoc . 
-                     dimapm unAssoc assoc . 
+triCompose las lba = dimapP unAssoc assoc . 
+                     dimapM unAssoc assoc . 
                      las . lba
 
 -- Parallel product of TriLenses
@@ -140,9 +139,9 @@ newtype PRight t m dm p dp s ds m' dm' p' dp' s' ds' = PRight {
 
 -- It's a TriProfunctor in these variables
 instance (TriProFunctor t) => TriProFunctor (PRight t m dm p dp s ds) where
-    dimap f g (PRight t)  = PRight $ dimap  (second f) (second g) t 
-    dimapp f g (PRight t) = PRight $ dimapp (second f) (second g) t
-    dimapm f g (PRight t) = PRight $ dimapm (second f) (second g) t
+    dimapS f g (PRight t) = PRight $ dimapS  (second f) (second g) t 
+    dimapP f g (PRight t) = PRight $ dimapP (second f) (second g) t
+    dimapM f g (PRight t) = PRight $ dimapM (second f) (second g) t
 
 -- It's a TriTambara in thes variables
 instance (Trimbara t) => Trimbara (PRight t m dm p dp s ds) where
@@ -150,17 +149,17 @@ instance (Trimbara t) => Trimbara (PRight t m dm p dp s ds) where
     -- need  :: (m, m')  (p, p') (s, s') -> 
     --          (m, (m1, m')) (p, p') (s, (m1, s'))
     alpha = PRight . 
-        dimap  jumpRight unJumpRight .
-        dimapm jumpRight unJumpRight . 
+        dimapS skipRight unSkipRight .
+        dimapM skipRight unSkipRight . 
         alpha .  --  (m1, (m, m')) (p, p') (m1, (s, s'))
         unPRight --   (m, m')      (p, p')      (s, s')
 
     -- beta  :: m p (p1, s) -> m (p, p1) s
     -- need  :: (m, m') (p, p') (s, (p1, s')) -> (m, m') ((p, (p', p1)) (s, s')
     beta = PRight .
-      dimapp unAssoc assoc .
+      dimapP unAssoc assoc .
       beta . -- (m, m') ((p, p'), p1) (s, s')
-      dimap jumpRight unJumpRight . -- (m, m') (p, p') (p1, (s, s'))
+      dimapS skipRight unSkipRight . -- (m, m') (p, p') (p1, (s, s'))
       unPRight -- (m, m') (p, p') (s, (p1, s'))
 
 newtype PLeft t m' dm' p' dp' s' ds' m dm p dp s ds = PLeft { 
@@ -168,9 +167,9 @@ newtype PLeft t m' dm' p' dp' s' ds' m dm p dp s ds = PLeft {
 
 -- It's a TriProfunctor in these variables
 instance (TriProFunctor t) => TriProFunctor (PLeft t m dm p dp s ds) where
-    dimap f g (PLeft t)  = PLeft $ dimap (first f) (first g) t 
-    dimapp f g (PLeft t) = PLeft $ dimapp (first f) (first g) t
-    dimapm f g (PLeft t) = PLeft $ dimapm (first f) (first g) t
+    dimapS f g (PLeft t) = PLeft $ dimapS (first f) (first g) t 
+    dimapP f g (PLeft t) = PLeft $ dimapP (first f) (first g) t
+    dimapM f g (PLeft t) = PLeft $ dimapM (first f) (first g) t
 
 -- It's a TriTambara in these variables
 instance (Trimbara t) => Trimbara (PLeft t m dm p dp s ds) where
@@ -178,16 +177,16 @@ instance (Trimbara t) => Trimbara (PLeft t m dm p dp s ds) where
     -- need  :: (m, m')  (p, p') (s, s') -> 
     --          ((m1, m), m') (p, p') ((m1, s), s')
     alpha = PLeft .
-        dimap assoc unAssoc .
-        dimapm  unAssoc assoc . 
+        dimapS assoc unAssoc .
+        dimapM  unAssoc assoc . 
                 alpha . -- (m1, (m, m')) (p, p') (m1, (s, s'))
                 unPLeft -- (m, m') (p, p') (s, s')
     -- beta :: m p (p1, s) -> m (p, p1) s
     -- need :: (m, m') (p, p') ((p1, s), s') -> (m, m') ((p, p1), p') (s, s')
     beta = PLeft .
-      dimapp jumpLeft unJumpLeft .
+      dimapP skipLeft unSkipLeft .
       beta . -- (m, m') ((p, p'), p1), (s, s')
-      dimap unAssoc assoc . -- (m, m') (p, p') (p1, (s, s'))
+      dimapS unAssoc assoc . -- (m, m') (p, p') (p1, (s, s'))
       unPLeft -- (m, m') (p, p') ((p1, s), s')
 
 prodLens :: TriLens a da m dm q  dq  s  ds -> 
@@ -198,125 +197,42 @@ prodLens :: TriLens a da m dm q  dq  s  ds ->
     -- l3 :: t  m3            r3           (a, a') -> 
     --       t ((m, m'), m3) (r3, (q, q')) (s, s')
 prodLens l1 l2 = 
-    dimapp unAssoc assoc . 
-    dimapm unAssoc assoc . 
-    dimapp (second unLunit) (second lunit) .
-    dimapm (first runit) (first unRunit) .
+    dimapP unAssoc assoc . 
+    dimapM unAssoc assoc . 
+    dimapP (second unLunit) (second lunit) .
+    dimapM (first runit) (first unRunit) .
     unPRight . l2 . PRight . unPLeft . l1 . PLeft .
-    dimapp runit unRunit .
-    dimapm unLunit lunit
+    dimapP runit unRunit .
+    dimapM unLunit lunit
 
 -- Monoidal category structure maps
-unLunit q = ((), q)
-lunit  :: ((), q) -> q
-lunit ((), q) = q
-unRunit :: q -> (q, ())
-unRunit q = (q, ())
-runit  :: (q, ()) -> q
-runit (q, ()) = q
+lunit  :: ((), a) -> a
+lunit ((), a) = a
+unLunit :: a -> ((), a)
+unLunit a = ((), a)
+runit  :: (a, ()) -> a
+runit (a, ()) = a
+unRunit :: a -> (a, ())
+unRunit a = (a, ())
 
 assoc :: ((a, b), c) -> (a, (b, c))
 assoc ((a, b), c) = (a, (b, c))
 unAssoc :: (a, (b, c)) -> ((a, b), c)
 unAssoc (a, (b, c))= ((a, b), c)
 
+-- Symmetric monoidal structure maps
+
 sym :: (a, b) -> (b, a)
 sym (a, b) = (b, a)
 
-jumpRight :: (x, (b, c)) -> (b, (x, c))
-jumpRight (x, (b, c)) = (b, (x, c))
+skipRight :: (x, (b, c)) -> (b, (x, c))
+skipRight (x, (b, c)) = (b, (x, c))
 
-unJumpRight :: (b, (x, c)) -> (x, (b, c))
-unJumpRight (b, (x, c)) = (x, (b, c))
+unSkipRight :: (b, (x, c)) -> (x, (b, c))
+unSkipRight (b, (x, c)) = (x, (b, c))
 
-jumpLeft :: ((a, b), x) -> ((a, x), b)
-jumpLeft ((a, b), x) = ((a, x), b)
+skipLeft :: ((a, b), x) -> ((a, x), b)
+skipLeft ((a, b), x) = ((a, x), b)
 
-unJumpLeft :: ((a, x), b) -> ((a, b), x)
-unJumpLeft ((a, x), b) = ((a, b), x)
-
--- Testing
-
-type D = Double
--- Ideally, a counted vector
-type V = [D]
-
--- Simple linear lens, scalar product of parameters and inputs
-linearL :: PreLens D D (V, V) (V, V) V V V V
-linearL = PreLens fw bw
-  where
-    fw :: (V, V) -> ((V, V), D)
-    -- a = Sum p * s
-    fw (p, s) = ((s, p), sum $ zipWith (*) p s)
-    -- da/dp = s, da/ds = p
-    bw :: ((V, V), D) -> (V, V)
-    bw ((s, p), da) = (fmap (da *) s  -- da/dp
-                      ,fmap (da *) p) -- da/ds
-
--- Add bias to input
-biasL :: PreLens D D () () D D D D
-biasL = PreLens fw bw 
-  where 
-    fw :: (D, D) -> ((), D)
-    fw (p, s) = ((), p + s)
-    -- da/dp = 1, da/ds = 1
-    bw :: ((), D) -> (D, D)
-    bw (_, da) = (da, da)
-
--- Non-linear activation lens using tanh
-activ :: PreLens D D D D () () D D
-activ = PreLens fw bw
-  where
-    -- a = tanh s
-    fw (_, s) = (s, tanh s)
-    -- da/ds = 1 + (tanh s)^2
-    bw (s, da)= ((), da * (1 - (tanh s)^2)) -- a * da/ds
-
--- Convert both to TriLens
--- p V D D -> p V V V
-linearT :: TriLens D D (V, V) (V, V) V V V V
-linearT = toTamb linearL
--- p D D D -> p D D D
-biasT :: TriLens D D () () D D D D
-biasT = toTamb biasL
-
-activT :: TriLens D D D D () () D D
-activT = toTamb activ
-
--- Compose two TriLenses
-affineT :: TriLens D D ((V, V), ()) ((V, V), ()) (D, V) (D, V) V V
-affineT = triCompose linearT biasT 
-
--- Compose three TriLenses
-neuronT :: TriLens D D (((V, V), ()), D) (((V, V), ()), D) ((), (D, V)) ((), (D, V)) V V
-neuronT = triCompose (triCompose linearT biasT) activT
-
--- Turn the composition back to PreLens
-preAffine :: PreLens D D ((V, V), ()) ((V, V), ()) (D, V) (D, V) V V
-preAffine = fromTamb affineT
-
-preNeuron :: PreLens D D (((V, V), ()), D) (((V, V), ()), D) (D, V) (D, V) V V
-preNeuron = dimapp unLunit lunit (fromTamb neuronT)
-
-affine :: ExLens D D (D, V) (D, V) V V
-affine = ExLens preAffine 
-
-neuron :: ExLens D D (D, V) (D, V) V V
-neuron = ExLens preNeuron
-
-fwd :: ExLens a da q q' s ds -> (q, s) -> a
-fwd (ExLens (PreLens f b)) = snd . f
-bwd :: ExLens a da q q' s ds -> (q, s, da) -> (q', ds)
-bwd (ExLens (PreLens f b)) (q, s, da)= b (fst (f (q, s)), da)
-
-testTriTamb :: IO ()
-testTriTamb = do
-    putStrLn "forward"
-    print $ fwd affine ((0.01, [-0.1, 0.1]), [2, 30])
-    putStrLn "backward"
-    print $ bwd affine ((0.1, [1.3, -1.4]), [0.21, 0.33], 1)
-
-    putStrLn "forward neuron"
-    print $ fwd neuron ( (0.01, [-0.1, 0.1]), [2, 30])
-    putStrLn "backward neuron"
-    print $ bwd neuron ( (0.1, [1.3, -1.4]), [0.21, 0.33], 1)
+unSkipLeft :: ((a, x), b) -> ((a, b), x)
+unSkipLeft ((a, x), b) = ((a, b), x)
