@@ -211,6 +211,7 @@ prodLens l1 l2 =
 
 vecLens :: Int -> TriLens a da m dm p  dp  s  ds -> 
             TriLens [a] [da] [m] [dm] [p] [dp] [s] [ds]
+  -- m1 p1 [a] -> ([m], m1) (p1, [p]) [s]
 vecLens 0 _ = nilLens
 vecLens n l = consLens l (vecLens (n - 1) l)
 
@@ -237,6 +238,22 @@ cons :: (a, [a]) -> [a]
 cons (a, as) = a : as
 unCons :: [a] -> (a, [a])
 unCons (a : as) = (a, as)
+
+
+-- This is for training neural networks. Instead of running batches
+-- of training data in series, we can do it in parallel and accumulate
+-- the parameters for the next batch.
+
+-- A batch of lenses in parallel, sharing the same parameters
+-- Back propagation combines the parameters
+batchN :: (Monoid dp) =>
+    Int -> TriLens  a da m dm p dp s ds -> TriLens [a] [da] [m] [dm] p dp [s] [ds]
+    -- l   :: m1 p1 a -> (m, m1) (p1, p) s
+    -- vec :: m1 p1 [a] -> ([m], m1) (p1, [p]) [s]
+    -- out :: m1 p1 [a] -> ([m], m1) (p1, p) [s]
+batchN n l = 
+  dimapP (second (replicate n)) (second mconcat) . vecLens n l 
+
 
 -- Monoidal category structure maps
 lunit  :: ((), a) -> a
