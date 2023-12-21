@@ -1,8 +1,8 @@
 module PreLens where
 import Data.Bifunctor ( Bifunctor(second, first, bimap) )
 
--- Pre-lens, parameterized by 4 monoidal actions m dm and p dp
--- Pre-lens category has objects <s, ds>, etc.
+-- Pre-lens, uses 4 monoidal actions parameterized by m dm and p dp
+-- Pre-lens category has objects <a, da> <s, ds>, etc.
 -- Pre-lenses are morphism from <s, ds> to <a, da> 
 
 data PreLens a da m dm p dp s ds =
@@ -15,8 +15,9 @@ preCompose ::
     PreLens b db (m, n) (dm, dn) (q, p) (dq, dp) s ds
 preCompose (PreLens f1 g1) (PreLens f2 g2) = PreLens f3 g3
   where
-    -- f3 = unAssoc . second f2 . assoc . first sym . unAssoc . second f1 . assoc
-    -- g3 = unAssoc . second g1 . assoc . first sym . unAssoc . second g2 . assoc
+    f3 = unAssoc . second f2 . assoc . first sym . unAssoc . second f1 . assoc
+    g3 = unAssoc . second g1 . assoc . first sym . unAssoc . second g2 . assoc
+{- or more verbose:
     f3 ((q, p), s) =
       let (m, a) = f1 (p, s)
           (n, b) = f2 (q, a)
@@ -25,11 +26,12 @@ preCompose (PreLens f1 g1) (PreLens f2 g2) = PreLens f3 g3
       let (dq, da) = g2 (dn, db)
           (dp, ds) = g1 (dm, da)
       in ((dq, dp), ds)
+-}
 
 idPreLens :: PreLens a da () () () () a da
 idPreLens = PreLens id id
 
--- Existential lens is a "trace" of a pre-lens
+-- Existential lens is a "trace" of a pre-lens over m
 data ExLens a da p dp s ds = forall m. ExLens (PreLens a da m m p dp s ds)
 
 -- Composition of existential lenses follows
@@ -149,8 +151,8 @@ instance (Trimbara t) => Trimbara (PRight t m dm p dp s ds) where
     -- need  :: (m, m')  (p, p') (s, s') -> 
     --          (m, (m1, m')) (p, p') (s, (m1, s'))
     alpha = PRight . 
-        dimapS skipRight unSkipRight .
-        dimapM skipRight unSkipRight . 
+        dimapS skipRight skipRight .
+        dimapM skipRight skipRight . 
         alpha .  --  (m1, (m, m')) (p, p') (m1, (s, s'))
         unPRight --   (m, m')      (p, p')      (s, s')
 
@@ -159,7 +161,7 @@ instance (Trimbara t) => Trimbara (PRight t m dm p dp s ds) where
     beta = PRight .
       dimapP unAssoc assoc .
       beta . -- (m, m') ((p, p'), p1) (s, s')
-      dimapS skipRight unSkipRight . -- (m, m') (p, p') (p1, (s, s'))
+      dimapS skipRight skipRight . -- (m, m') (p, p') (p1, (s, s'))
       unPRight -- (m, m') (p, p') (s, (p1, s'))
 
 newtype PLeft t m' dm' p' dp' s' ds' m dm p dp s ds = PLeft { 
@@ -184,26 +186,57 @@ instance (Trimbara t) => Trimbara (PLeft t m dm p dp s ds) where
     -- beta :: m p (p1, s) -> m (p, p1) s
     -- need :: (m, m') (p, p') ((p1, s), s') -> (m, m') ((p, p1), p') (s, s')
     beta = PLeft .
-      dimapP skipLeft unSkipLeft .
+      dimapP skipLeft skipLeft .
       beta . -- (m, m') ((p, p'), p1), (s, s')
       dimapS unAssoc assoc . -- (m, m') (p, p') (p1, (s, s'))
       unPLeft -- (m, m') (p, p') ((p1, s), s')
 
-prodLens :: TriLens a da m dm q  dq  s  ds -> 
-            TriLens a' da' m' dm' q' dq' s' ds' ->
-            TriLens (a, a') (da, da') (m, m') (dm, dm') (q, q') (dq, dq') (s, s') (ds, ds')
-    -- l1 :: t1 m1 r1 a  -> t1 (m, m1)  (r1, q)  s
-    -- l2 :: t2 m2 r2 a' -> t2 (m', m2) (r2, q') s'
-    -- l3 :: t  m3            r3           (a, a') -> 
-    --       t ((m, m'), m3) (r3, (q, q')) (s, s')
+prodLens :: TriLens a da m dm p  dp  s  ds -> 
+            TriLens a' da' m' dm' p' dp' s' ds' ->
+            TriLens (a, a') (da, da') (m, m') (dm, dm') (p, p') (dp, dp') (s, s') (ds, ds')
+          -- l1 :: m1 p1 a    -> (m, m1) (p1, p) s
+          -- l2 :: m1' p1' a' -> (m', m1') (p1', p') s'
+          -- l3 :: m1 p1 (a, a') -> ((m, m'), m1) (p1, (p, p')) (s, s')
 prodLens l1 l2 = 
-    dimapP unAssoc assoc . 
-    dimapM unAssoc assoc . 
-    dimapP (second unLunit) (second lunit) .
-    dimapM (first runit) (first unRunit) .
-    unPRight . l2 . PRight . unPLeft . l1 . PLeft .
-    dimapP runit unRunit .
-    dimapM unLunit lunit
+  dimapP unAssoc assoc .   -- ((m, m'), m1) (p1, (p, p')) (s, s')
+  dimapM unAssoc assoc .   -- 
+  dimapP (second unLunit) (second lunit) .  -- (m, (m', m1)) ((p1, p), p') (s, s')
+  dimapM (first runit) (first unRunit) .    -- 
+  unPRight . l2 . PRight .  -- ((m, ()), (m', m1)) ((p1, p), ((), p')) (s, s')
+  unPLeft  . l1 . PLeft .   -- ((m, ()), m1) ((p1, p), ()) ((s, a')
+  dimapP runit unRunit . -- ((), m1) (p1, ()) (a, a')
+  dimapM unLunit lunit   -- ((), m1) p1 (a, a')
+
+-- Create a vector of n identical lenses in parallel
+
+vecLens :: Int -> TriLens a da m dm p  dp  s  ds -> 
+            TriLens [a] [da] [m] [dm] [p] [dp] [s] [ds]
+vecLens 0 _ = nilLens
+vecLens n l = consLens l (vecLens (n - 1) l)
+
+nilLens :: TriLens [a] [da] [m] [dm] [p] [dp] [s] [ds]
+-- m1 p1 [a] -> ([m], m1) (p1, [p]) [s]
+nilLens = dimapM ([], ) snd .
+          dimapP fst (, []) .
+          dimapS (const []) (const [])
+ 
+consLens :: TriLens a da m dm p  dp  s  ds -> 
+            TriLens [a] [da] [m] [dm] [p] [dp] [s] [ds] ->
+            TriLens [a] [da] [m] [dm] [p] [dp] [s] [ds]
+          -- l1 :: m1 p1 a    -> (m, m1) (p1, p) s
+          -- l2 :: m2 p2 [a] -> ([m], m2) (p2, [p]) [s]
+          -- l3 :: m3 p3 [a] -> ([m], m3) (p3, [p]) [s]
+consLens l1 l2 = 
+  dimapP (second unCons) (second cons) .
+  dimapM (first cons) (first unCons) .
+  dimapS unCons cons .
+  prodLens l1 l2 .  -- m3 p3 (a, [a]) -> ((m, [m]), m3) (p3, (p, [p]))(s, [s])
+  dimapS cons unCons
+
+cons :: (a, [a]) -> [a]
+cons (a, as) = a : as
+unCons :: [a] -> (a, [a])
+unCons (a : as) = (a, as)
 
 -- Monoidal category structure maps
 lunit  :: ((), a) -> a
@@ -228,11 +261,5 @@ sym (a, b) = (b, a)
 skipRight :: (x, (b, c)) -> (b, (x, c))
 skipRight (x, (b, c)) = (b, (x, c))
 
-unSkipRight :: (b, (x, c)) -> (x, (b, c))
-unSkipRight (b, (x, c)) = (x, (b, c))
-
 skipLeft :: ((a, b), x) -> ((a, x), b)
 skipLeft ((a, b), x) = ((a, x), b)
-
-unSkipLeft :: ((a, x), b) -> ((a, b), x)
-unSkipLeft ((a, x), b) = ((a, b), x)
