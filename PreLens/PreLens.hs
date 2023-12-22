@@ -118,15 +118,15 @@ toTamb :: PreLens a da m dm p dp s ds -> TriLens a da m dm p dp s ds
 toTamb (PreLens fw bw) = beta . dimapS fw bw . alpha
 
 triCompose ::
-    TriLens a da m dm p dp s ds -> 
-    TriLens b db n dn q dq a da ->
-    TriLens b db (m, n) (dm, dn) (q, p) (dq, dp) s ds
--- lba :: m1 p1 b -> (n, m1) (p1, q) a
--- las :: (n, m1) (p1, q) a -> (m, (n, m1)) ((p1, q), p) s
--- lbs :: m1 p1 b -> ((m, n), m1) (p1, (q, p)) s
+    TriLens b db m dm p dp s ds -> 
+    TriLens a da n dn q dq b db ->
+    TriLens a da (m, n) (dm, dn) (q, p) (dq, dp) s ds
+-- lba :: m1 p1 a -> (n, m1) (p1, q) b
+-- las :: (n, m1) (p1, q) b -> (m, (n, m1)) ((p1, q), p) s
+-- lbs :: m1 p1 a -> ((m, n), m1) (p1, (q, p)) s
 -- dimapP :: (p' -> p) -> (dp -> dp') -> m p s -> m  p' s
 -- dimapM :: (m -> m') -> (dm' -> dm) -> m p s -> m' p  s
--- las . lba :: m1 p1 b -> (m, (n, m1)) ((p1, q), p) s
+-- las . lba :: m1 p1 a -> (m, (n, m1)) ((p1, q), p) s
 triCompose las lba = dimapP unAssoc assoc . 
                      dimapM unAssoc assoc . 
                      las . lba
@@ -253,6 +253,14 @@ batchN :: (Monoid dp) =>
     -- out :: m1 p1 [a] -> ([m], m1) (p1, p) [s]
 batchN n l = 
   dimapP (second (replicate n)) (second mconcat) . vecLens n l 
+
+-- A splitter combinator
+branch :: Monoid s => Int -> TriLens [s] [s] () () () () s s
+-- m1 p1 [s] -> ((), m1) (p1, ()) s
+branch n =
+  dimapM unLunit lunit . 
+  dimapP runit unRunit . 
+  dimapS (replicate n) mconcat
 
 
 -- Monoidal category structure maps
