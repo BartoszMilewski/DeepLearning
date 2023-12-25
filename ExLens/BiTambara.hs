@@ -20,15 +20,15 @@ assoc_1 (a, (b, c))= ((a, b), c)
 
 -- This is the same existential lens but with rearranged wires
 -- outputs first, then parameters, then inputs
-data ExLens a da q q' s ds = 
-  forall m . ExLens ((q, s)  -> (m, a))  
-                    ((m, da) -> (q', ds))
+data ExLens a da p dp s ds = 
+  forall m . ExLens ((p, s)  -> (m, a))  
+                    ((m, da) -> (dp, ds))
 
 -- Accessors: forward and backward pass
-fwd :: ExLens a da q q' s ds -> (q, s) -> a
+fwd :: ExLens a da p dp s ds -> (p, s) -> a
 fwd (ExLens f b) = snd . f
-bwd :: ExLens a da q q' s ds -> (q, s, da) -> (q', ds)
-bwd (ExLens f b) (q, s, da)= b (fst (f (q, s)), da)
+bwd :: ExLens a da p dp s ds -> (p, s, da) -> (dp, ds)
+bwd (ExLens f b) (p, s, da)= b (fst (f (p, s)), da)
 
 -- Profunctor representation of lens
 -- We need parameterized profunctors
