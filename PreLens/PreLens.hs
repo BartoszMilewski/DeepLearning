@@ -11,8 +11,9 @@ data PreLens a da m dm p dp s ds =
 
 -- Pre-lenses are composable
 preCompose ::
-    PreLens a da m dm p dp s ds -> PreLens b db n dn q dq a da ->
-    PreLens b db (m, n) (dm, dn) (q, p) (dq, dp) s ds
+    PreLens a' da' m dm p dp s ds -> 
+    PreLens a da n dn q dq a' da' ->
+    PreLens a da (m, n) (dm, dn) (q, p) (dq, dp) s ds
 preCompose (PreLens f1 g1) (PreLens f2 g2) = PreLens f3 g3
   where
     f3 = unAssoc . second f2 . assoc . first sym . unAssoc . second f1 . assoc
@@ -30,18 +31,6 @@ preCompose (PreLens f1 g1) (PreLens f2 g2) = PreLens f3 g3
 
 idPreLens :: PreLens a da () () () () a da
 idPreLens = PreLens id id
-
--- Existential lens is a "trace" of a pre-lens over m
-data ExLens a da p dp s ds = forall m. ExLens (PreLens a da m m p dp s ds)
-
--- Composition of existential lenses follows
--- the composition of pre-lenses
-compose ::
-    ExLens a da p dp s ds -> ExLens b db q dq a da ->
-    ExLens  b db (q, p) (dq, dp) s ds
-compose (ExLens pl) (ExLens pl') = ExLens $ preCompose pl pl'
-
-
 
 -- A profunctor in three pairs of arguments (Notice: the polarities of m dm are flipped)
 class TriProFunctor t where
@@ -130,6 +119,32 @@ triCompose ::
 triCompose las lba = dimapP unAssoc assoc . 
                      dimapM unAssoc assoc . 
                      las . lba
+
+-- An existential lens is a trace over m of a PreLens
+-- The tracing can be done after all the compositions
+
+data ExLens a da p dp s ds = forall m. ExLens (PreLens a da m m p dp s ds)
+
+-- Extractors for an existential lens
+fwd' :: ExLens a da p dp s ds -> (p, s) -> a
+fwd' (ExLens (PreLens f b)) = snd . f
+bwd' :: ExLens a da p dp s ds -> (p, s, da) -> (dp, ds)
+bwd' (ExLens (PreLens f b)) (p, s, da) = b (fst (f (p, s)), da)
+
+-- Composition of existential lenses follows
+-- the composition of pre-lenses
+composeL ::
+    ExLens a da p dp s ds -> ExLens b db q dq a da ->
+    ExLens  b db (q, p) (dq, dp) s ds
+composeL (ExLens pl) (ExLens pl') = ExLens $ preCompose pl pl'
+
+
+-- Extractors for a triple Tambara lens
+fwd :: TriLens a da m m p dp s ds -> (p, s) -> a
+fwd l = fwd' (ExLens (fromTamb l))
+bwd :: TriLens a da m m p dp s ds ->  (p, s, da) -> (dp, ds)
+bwd l = bwd' (ExLens (fromTamb l))
+
 
 -- Parallel product of TriLenses
 
