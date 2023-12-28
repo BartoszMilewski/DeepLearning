@@ -1,5 +1,7 @@
 module Perceptron where
 import PreLens
+import Tambara
+import TriLens
 import NNet
 import Data.Bifunctor ( Bifunctor(second, first, bimap) )
 import Data.List

@@ -1,5 +1,7 @@
 module NNet where
 import PreLens
+import Tambara
+import TriLens
 import Data.Bifunctor ( Bifunctor(second, first, bimap) )
 
 -- Use existential lenses to create more complex neural networks
