@@ -135,6 +135,7 @@ initPara m stm = (Para b w, stm'')
 
 
 -- A layer of nOut identical neurons, each with mIn inputs
+-- V [((V, V), D)] [Para] V
 layer :: Int -> Int -> TriLens V V [((V, V), D)] [((V, V), D)] [Para] [Para] V V
 layer nOut mIn = 
   dimapP (second unRunit) (second runit) .
