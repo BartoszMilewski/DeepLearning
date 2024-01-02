@@ -171,6 +171,8 @@ batchN n l =
   dimapP (second (replicate n)) (second mconcat) . vecLens n l 
 
 -- A splitter combinator
+-- The simplest example of a combinator for connecting layers
+
 branch :: Monoid s => Int -> TriLens [s] [s] () () () () s s
 -- m1 p1 [s] -> ((), m1) (p1, ()) s
 branch n =

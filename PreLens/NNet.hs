@@ -61,6 +61,7 @@ instance VSpace Para where
 
 sumN :: Int -> V -> D
 sumN 0 _ = 0
+sumN n [] = error $ "sumN " ++ show n
 sumN n (a : as) = a + sumN (n - 1) as
 
 -- Simple linear lens, scalar product of parameters and inputs
@@ -139,7 +140,7 @@ initPara m stm = (Para b w, stm'')
 -- A layer of nOut identical neurons, each with mIn inputs
 -- V [((V, V), D)] [Para] V
 layer :: Int -> Int -> TriLens V V [((V, V), D)] [((V, V), D)] [Para] [Para] V V
-layer nOut mIn = 
+layer mIn nOut = 
   dimapP (second unRunit) (second runit) .
   dimapM (first lunit) (first unLunit) .
   triCompose (branch nOut) (vecLens nOut (neuronT mIn)) -- m1 p1 V -> (m1, ((), [((V, V), D)])) (([Para], ()), p1) V
@@ -228,7 +229,6 @@ test3 = do
 
 nrn2 :: TriLens D D ((V, V), D) ((V, V), D) Para Para V V
 nrn2  = neuronT 2
-
 
 test4 :: IO ()
 test4 = do
