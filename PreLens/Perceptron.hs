@@ -2,6 +2,7 @@ module Perceptron where
 import PreLens
 import Tambara
 import TriLens
+import Params
 import NNet
 import Data.Bifunctor ( Bifunctor(second, first, bimap) )
 import Data.List
@@ -30,4 +31,3 @@ initParaMlp mIn (n1 : n2 : ns) stm =
     let (pb, stm') = initParaBlock mIn n1 stm
         (pbs, stm'') = initParaMlp n1 (n2 : ns) stm'
     in (pb : pbs, stm'')
-

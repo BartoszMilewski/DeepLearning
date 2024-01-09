@@ -2,67 +2,10 @@ module NNet where
 import PreLens
 import Tambara
 import TriLens
+import Params
 import Data.Bifunctor ( Bifunctor(second, first, bimap) )
 
 -- Use existential lenses to create more complex neural networks
-
-type D = Double
--- Ideally, a counted vector
-type V = [D]
-
--- Parameters for a single neuron
-data Para = Para
-  {
-    bias   :: D
-  , weight :: V
-  } deriving Show
-
-mkPara :: (D, V) -> Para
-mkPara (b, v) = Para b v
-
-unPara :: Para -> (D, V)
-unPara p = (bias p, weight p)
-
--- Parameters for a layer of neurons
-type ParaBlock = [Para]
-
--- Additive monoid
-
-instance Semigroup D where
-    (<>) = (+)
-
-instance Monoid D where
-    mempty = 0.0
-
-instance Semigroup Para where
-    (<>) :: Para -> Para -> Para
-    p1 <> p2 = Para (bias p1 + bias p2) (zipWith (+) (weight p1) (weight p2))
-
-instance Monoid Para where
-    mempty :: Para
-    mempty = Para 0.0 (repeat 0.0)
-
--- Parameters form a vector space, we need to scale them and add them
-
-class Monoid v => VSpace v where
-    scale :: D -> v -> v
-
-instance VSpace D where
-    scale :: D -> D -> D
-    scale a x = a * x
-
-instance VSpace a => VSpace [a] where
-    scale :: VSpace a => D -> [a] -> [a]
-    scale a = fmap (scale a)
-
-instance VSpace Para where
-    scale :: D -> Para -> Para
-    scale a p = Para (scale a (bias p)) (scale a (weight p))
-
-sumN :: Int -> V -> D
-sumN 0 _ = 0
-sumN n [] = error $ "sumN " ++ show n
-sumN n (a : as) = a + sumN (n - 1) as
 
 -- Simple linear lens, scalar product of parameters and inputs
 linearL :: Int -> PreLens D D (V, V) (V, V) V V V V
@@ -161,23 +104,45 @@ unfoldl n f s = (x : xs, s'')
 
 
 -- The loss lens, compares results with ground truth
-lossL :: PreLens D D (V, V) (V, V) V V V V
-lossL = PreLens fw bw 
+loss1L :: PreLens D D (V, V) (V, V) V V V V
+loss1L = PreLens fw bw 
   where
     fw :: (V, V) -> ((V, V), D)
-    fw (gTruth, s) = ((gTruth, s), delta)
-      where
-        -- 1/2 Sum (s - g)^2
-        delta = 0.5 * sum (map (^2) (zipWith (-) s gTruth))
+    fw (gTruth, s) = ((gTruth, s), sqDist s gTruth)
     bw :: ((V, V), D) -> (V, V)
     bw ((gTruth, s), da) = (fmap negate delta', delta')
+      where delta' = map (da *) (s `minus` gTruth)
+      -- da/ds = s - g
+      -- da/dg = g - s
+
+minus :: Num c => [c] -> [c] -> [c]
+minus = zipWith (-)
+
+-- 1/2 Sum (s - g)^2
+sqDist :: Fractional a => [a] -> [a] -> a
+sqDist x y = 0.5 * sum (map (^2) (zipWith (-) x y))
+
+loss1T :: TriLens D D (V, V) (V, V) V V V V
+loss1T = toTamb loss1L
+
+-- The loss lens, compares results with ground truth
+lossL :: PreLens D D ([V], [V]) ([V], [V]) [V] [V] [V] [V]
+lossL = PreLens fw bw 
+  where
+    fw :: ([V], [V]) -> (([V], [V]), D)
+    fw (gTruth, s) = ((gTruth, s), sqDist (concat s) (concat gTruth))
+    bw :: (([V], [V]), D) -> ([V], [V])
+    bw ((gTruth, s), da) = (fmap (fmap negate) delta', delta')
       -- da/ds = s - g
       -- da/dg = g - s
       where
-        delta' = map (da *) (zipWith (-) s gTruth)
+        delta' :: [V]
+        delta' = fmap (fmap (da *)) (zipWith minus s gTruth)
 
-lossT :: TriLens D D (V, V) (V, V) V V V V
+lossT :: TriLens D D ([V], [V]) ([V], [V]) [V] [V] [V] [V]
 lossT = toTamb lossL
+--------------------
+
 
 -- fwd :: TriLens a da m dm p dp s ds -> (p, s) -> a
 -- fwd l = let PreLens f b = fromTamb l 
@@ -204,6 +169,8 @@ test2 :: IO ()
 test2 = do
     let s = [0, 0.1 .. ]
     let (p, s') = initPara 2 s
+    let (p', s'') = initPara 2 s'
+    putStrLn $ "p = " ++ show p ++ "\np' = " ++ show p' ++ "\np <+> (scale (-0.1) p') = " ++ show (p <+> (scale (-0.1) p')) ++ "\n"
     print p
     print $ fst $ unfoldl 3 (initPara 2) s'
 

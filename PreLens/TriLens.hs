@@ -1,6 +1,7 @@
 module TriLens where
 import PreLens
 import Tambara
+import Params
 import Data.Bifunctor ( Bifunctor(second, first, bimap) )
 
 ----------
@@ -26,6 +27,7 @@ toTamb :: PreLens a da m dm p dp s ds -> TriLens a da m dm p dp s ds
 -- beta  ::       ->   (m, m1) (p1, p) s
 toTamb (PreLens fw bw) = beta . dimapS fw bw . alpha
 
+-- triCompose :: b m p s -> a n q b -> a (m, n) (q, p) s
 triCompose ::
     TriLens b db m dm p dp s ds -> 
     TriLens a da n dn q dq b db ->
@@ -162,13 +164,13 @@ unCons (a : as) = (a, as)
 
 -- A batch of lenses in parallel, sharing the same parameters
 -- Back propagation combines the parameters
-batchN :: (Monoid dp) =>
+batchN :: (VSpace dp) =>
     Int -> TriLens  a da m dm p dp s ds -> TriLens [a] [da] [m] [dm] p dp [s] [ds]
     -- l   :: m1 p1 a -> (m, m1) (p1, p) s
     -- vec :: m1 p1 [a] -> ([m], m1) (p1, [p]) [s]
     -- out :: m1 p1 [a] -> ([m], m1) (p1, p) [s]
 batchN n l = 
-  dimapP (second (replicate n)) (second mconcat) . vecLens n l 
+  dimapP (second (replicate n)) (second accumulate) . vecLens n l 
 
 -- A splitter combinator
 -- The simplest example of a combinator for connecting layers
