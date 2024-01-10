@@ -46,31 +46,12 @@ testP =
     putStrLn "Backward input:"
     print ds
 
-batch :: TriLens [V] [V] [[[((V, V), D)]]] [[[((V, V), D)]]] [[Para]] [[Para]] [V] [V]
-batch = batchN 4 mlp 
-
--- batch [V] [[[((V, V), D)]]] [[Para]] [V]
--- lossT :: D ([V], [V]) [V] [V]
--- triCompose :: b m p s -> a n q b -> a (m, n) (q, p) s
-batchLoss :: TriLens D D 
-                     ([[[((V, V), D)]]], ([V], [V])) ([[[((V, V), D)]]], ([V], [V]))
-                     ([V], [[Para]]) ([V], [[Para]])
-                     [V] [V]
-batchLoss = triCompose batch lossT
-{-
-runBatch :: Int -> TriLens a da m dm p dp s ds -> a -> p -> s -> IO ()
-runBatch n lns xs ys para = 
-    let batch = batchN n lns 
-        batchLoss = triCompose batch lossT
-    in 
-        print $ fwd batchLoss ((ys, para), xs)
--}
-
+-- Gradient descent
 testLearning :: Double -> [V] -> [V] -> [[Para]] -> IO [[Para]]
 testLearning rate xs ys para = do
     let ((_, dp), _) = bwd batchLoss ((ys, para), xs, 1)
     let para1 = para <+> scale (-rate) dp
-    putStrLn "\nSecond pass: "
+    putStrLn "\nForward pass: "
     print $ fwd batch (para1, xs)
     putStrLn "Forward pass error: " 
     print $ fwd batchLoss ((ys, para1), xs)
@@ -97,7 +78,7 @@ main = do
              ,[0.5, 1, 1]
              ,[1, 1, -1]]
     let ys = fmap singleton [1, -1, -1, 1]
-    let rate = 0.3
+    let rate = 0.5
     let (para, _) = initParaMlp 3 [4, 4, 1] rands
-    paras <- iterateM 20 (testLearning rate xs ys) para 
+    paras <- iterateM 25 (testLearning rate xs ys) para 
     return ()
