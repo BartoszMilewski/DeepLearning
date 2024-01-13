@@ -8,6 +8,7 @@ import Data.Int (Int32)
 import Data.Bits (shiftR)
 import Data.List
 import Control.Monad
+
 -- Home-made random number generator, in case no Random library available
 
 random :: Int32 -> [Int32]
@@ -20,36 +21,23 @@ rands = map normalize (random 42)
     normalize :: Int32 -> Double
     normalize n = fromIntegral n / 2147483647
 
-lyr :: TriLens V V [((V, V), D)] [((V, V), D)] [Para] [Para] V V
-lyr = layer 3 2 -- 3 in, 2 out
-
 testLayer :: IO ()
 testLayer = do
-  let (paras, _) = initParaBlock 3 2 rands
-  print $ fwd lyr (paras, [2, 3, -1])
-  putStrLn "Backward:"
-  let (dp, ds) = bwd lyr (paras, [2, 3, -1], [1, 1])
-  print dp
-
-mlp :: TriLens V V [[((V, V), D)]] [[((V, V), D)]] [[Para]] [[Para]] V V
-mlp = makeMlp 3 [4, 4, 1]
-
-testP :: IO ()
-testP = 
-  let xs = [2, 3, -1]
-      (para, _) = initParaMlp 3 [4, 4, 1] rands
-  in do
-    print $ fwd mlp (para, xs)
-    let (dp, ds) = bwd mlp (para, xs, [1])
-    putStrLn "Backward params:"
+    let (paras, _) = initParaBlock 3 2 rands
+    print $ fwd lyr (paras, [2, 3, -1])
+    putStrLn "Backward:"
+    let (dp, ds) = bwd lyr (paras, [2, 3, -1], [1, 1])
     print dp
-    putStrLn "Backward input:"
-    print ds
+  where
+    lyr :: TriLens V V [((V, V), D)] [((V, V), D)] [Para] [Para] V V
+    lyr = layer 3 2 -- 3 in, 2 out
 
 -- Gradient descent
-testLearning :: Double -> [V] -> [V] -> [[Para]] -> IO [[Para]]
-testLearning rate xs ys para = do
+testLearning :: TriLens V V [[((V, V), D)]] [[((V, V), D)]] [[Para]] [[Para]] V V ->
+    Double -> [V] -> [V] -> [[Para]] -> IO [[Para]]
+testLearning mlp rate xs ys para = do
     let ((_, dp), _) = bwd batchLoss ((ys, para), xs, 1)
+    -- Update parameters
     let para1 = para <+> scale (-rate) dp
     putStrLn "\nForward pass: "
     print $ fwd batch (para1, xs)
@@ -80,5 +68,8 @@ main = do
     let ys = fmap singleton [1, -1, -1, 1]
     let rate = 0.5
     let (para, _) = initParaMlp 3 [4, 4, 1] rands
-    paras <- iterateM 25 (testLearning rate xs ys) para 
+    paras <- iterateM 25 (testLearning mlp rate xs ys) para 
     return ()
+  where
+    mlp :: TriLens V V [[((V, V), D)]] [[((V, V), D)]] [[Para]] [[Para]] V V
+    mlp = makeMlp 3 [4, 4, 1]
