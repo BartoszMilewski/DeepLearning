@@ -59,6 +59,7 @@ iterateM n f x = do
     x' <- f x
     (x':) `fmap` iterateM (n-1) f x'
 
+-- Taken from Andrej Karpathy's micrograd tutorial
 main :: IO ()
 main = do
     let xs = [[2, 3, -1]
