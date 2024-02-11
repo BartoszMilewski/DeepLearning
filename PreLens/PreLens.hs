@@ -51,6 +51,22 @@ composeL ::
     ExLens  b db (q, p) (dq, dp) s ds
 composeL (ExLens pl) (ExLens pl') = ExLens $ preCompose pl pl'
 
+-- Combining the two extractors into one function
+
+type ParaLens a da p dp s ds = (p, s) -> (da -> (dp, ds), a)
+
+-- van Laarhoven representation of parametric lens
+type VanL a da p dp s ds = forall f. Functor f => 
+  (a -> f da) -> (p, s) -> f (dp, ds)
+
+toVLL :: ParaLens a da p dp s ds -> VanL a da p dp s ds
+toVLL para f = fmap (uncurry ($)) . strength . second f . para
+
+fromVLL :: VanL a da p dp s ds -> ParaLens a da p dp s ds
+fromVLL vll = unF . vll (curry MkF id)
+
+newtype F a da x = MkF { unF :: (da -> x, a) }
+  deriving Functor
 
 -- Monoidal category structure maps
 lunit  :: ((), a) -> a
@@ -66,6 +82,9 @@ assoc :: ((a, b), c) -> (a, (b, c))
 assoc ((a, b), c) = (a, (b, c))
 unAssoc :: (a, (b, c)) -> ((a, b), c)
 unAssoc (a, (b, c))= ((a, b), c)
+
+strength :: Functor f => (a, f b) -> f (a, b)
+strength (a, fb) = fmap (a,) fb
 
 -- Symmetric monoidal structure maps
 
