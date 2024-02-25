@@ -1,10 +1,15 @@
 module ExLens where
 
+data PLens a da p dp s ds = 
+  PLens { fwd' :: (p, s) -> a
+        , bwd' :: (p, s, da) -> (dp, ds)
+        } 
+
 -- Existential parametic lens
 
-data ExLens p dp s ds a da = 
+data ExLens a da p dp s ds = 
   forall m . ExLens ((p, s)  -> (m, a))  
-                   ((m, da) -> (dp, ds))
+                    ((m, da) -> (dp, ds))
 
 -- For convenience, a lens with empty (unit) parameter
 data Lens s ds a da =
@@ -13,10 +18,10 @@ data Lens s ds a da =
 
 -- Accessors
 
-fwd :: ExLens p dp s ds a da -> (p, s) -> a
+fwd :: ExLens a da p dp s ds -> (p, s) -> a
 fwd (ExLens f g) (p, s) = snd $ f (p, s)
 
-bwd :: ExLens p dp s ds a da -> (p, s, da) -> (dp, ds)
+bwd :: ExLens a da p dp s ds -> (p, s, da) -> (dp, ds)
 bwd (ExLens f g) (p, s, da) = g (fst (f (p, s)), da)
 
 fwd0 :: Lens s ds a da -> s -> a
@@ -28,8 +33,8 @@ bwd0 (Lens f g) (s, da) = g (fst (f s), da)
 -- Serial composition
 
 compose ::
-    ExLens p dp s ds a da -> ExLens q dq a da b db ->
-    ExLens  (p, q) (dp, dq) s ds b db
+    ExLens a da p dp s ds -> ExLens b db q dq a da ->
+    ExLens b db (p, q) (dp, dq) s ds
 compose (ExLens f1 g1) (ExLens f2 g2) = ExLens f3 g3
   where
     f3 ((p, q), s) =
@@ -44,8 +49,8 @@ compose (ExLens f1 g1) (ExLens f2 g2) = ExLens f3 g3
 -- Convenient special cases
 
 composeR ::
-    ExLens p dp s ds a da -> Lens a da b db ->
-    ExLens  p dp s ds b db
+    ExLens a da p dp s ds -> Lens a da b db ->
+    ExLens b db p dp s ds
 composeR (ExLens f1 g1) (Lens f2 g2) = ExLens f3 g3
   where
     f3 (p, s) =
@@ -58,8 +63,8 @@ composeR (ExLens f1 g1) (Lens f2 g2) = ExLens f3 g3
       in (dp, ds)
 
 composeL ::
-    Lens s ds a da -> ExLens q dq a da b db ->
-    ExLens  q dq s ds b db
+    Lens s ds a da -> ExLens b db q dq a da ->
+    ExLens b db q dq s ds
 composeL (Lens f1 g1) (ExLens f2 g2) = ExLens f3 g3
   where
     f3 (q, s) =
@@ -75,8 +80,8 @@ composeL (Lens f1 g1) (ExLens f2 g2) = ExLens f3 g3
 
 -- A pair of lenses in parallel
 prodLens ::
-    ExLens p dp s ds a da -> ExLens p' dp' s' ds' a' da' ->
-    ExLens (p, p') (dp, dp') (s, s') (ds, ds') (a, a') (da, da')
+    ExLens a da p dp s ds -> ExLens a' da' p' dp' s' ds' ->
+    ExLens (a, a') (da, da') (p, p') (dp, dp') (s, s') (ds, ds')
 prodLens (ExLens f1 g1) (ExLens f2 g2) = ExLens  f3 g3
   where
     f3 ((p, p'), (s, s')) = ((m, m'), (a, a'))
@@ -89,7 +94,7 @@ prodLens (ExLens f1 g1) (ExLens f2 g2) = ExLens  f3 g3
 
 -- Vector lens, combines n identical lenses in parallel
 vecLens ::
-    Int -> ExLens p dp s ds a da -> ExLens [p] [dp] [s] [ds] [a] [da]
+    Int -> ExLens a da p dp s ds -> ExLens [a] [da] [p] [dp] [s] [ds]
 vecLens 0 _ = ExLens (const ([], [])) (const ([], []))
 vecLens n lns = consLens lns (vecLens (n - 1) lns)
 
@@ -99,8 +104,8 @@ branch n = Lens (\s -> ((), replicate n s))
 
 -- A cons function combines a lens with a (parallel) list of lenses
 consLens :: 
-    ExLens p dp s ds a da -> ExLens [p] [dp] [s] [ds] [a] [da] ->
-    ExLens [p] [dp] [s] [ds] [a] [da]
+    ExLens a da p dp s ds -> ExLens [a] [da] [p] [dp] [s] [ds] ->
+    ExLens [a] [da] [p] [dp] [s] [ds]
 consLens (ExLens f g) (ExLens fs gs) = ExLens fv gv 
   where
     fv (p : ps, s : ss) = ((m, ms), a : as)
@@ -134,7 +139,7 @@ flatten = Lens f g
 -- A batch of lenses in parallel, sharing the same parameters
 -- Back propagation combines the parameters
 batchN :: (Monoid dp) =>
-    Int -> ExLens p dp s ds a da -> ExLens p dp [s] [ds] [a] [da]
+    Int -> ExLens a da p dp s ds -> ExLens [a] [da] p dp [s] [ds]
 batchN n (ExLens f g) = ExLens fv gv
   where
     fv (p, ss) = unzip $ fmap f $ zip (replicate n p) ss
@@ -144,7 +149,7 @@ batchN n (ExLens f g) = ExLens fv gv
 
 -- Rearrange vectors of parameters
 
-consParas :: ExLens  (p, [p]) (p, [p]) s ds a da -> ExLens  [p] [p] s ds a da
+consParas :: ExLens a da (p, [p]) (p, [p]) s ds -> ExLens a da [p] [p] s ds
 consParas (ExLens f g) = ExLens f' g' 
   where
     f' (p : ps, s) = f ((p, ps), s)
@@ -152,7 +157,7 @@ consParas (ExLens f g) = ExLens f' g'
       let ((dp, dps), ds) = g (m, da)
       in (dp : dps, ds)
 
-singleParas :: ExLens p dp s ds a da -> ExLens  [p] [dp] s ds a da
+singleParas :: ExLens a da p dp s ds -> ExLens a da [p] [dp] s ds
 singleParas (ExLens f g) = ExLens f' g' 
   where
     f' ([p], s) = f (p, s)
