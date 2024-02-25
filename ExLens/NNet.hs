@@ -51,7 +51,7 @@ instance VSpace Para where
 
 -- A simple linear lens: a scalar product of parameters and inputs
 
-linearL :: ExLens V V V V D D
+linearL :: ExLens D D V V V V
 linearL = ExLens fw bw
   where
     fw :: (V, V) -> ((V, V), D)
@@ -81,13 +81,13 @@ activ = Lens fw bw
     bw (s, da)= da * (1 - (tanh s)^2) -- a * da/ds
 
 -- Neuron as a composite of linear, bias, and activation
-neuron0 :: ExLens (V, D) (V, D) V V D D
+neuron0 :: ExLens D D (V, D) (V, D) V V
 neuron0 = composeR (compose linearL biasL) activ
 
 -- Affine parametric lens 
 -- (really a composition of linear and bias, but they are always used in combination)
 
-affine :: Int -> ExLens Para Para V V D D
+affine :: Int -> ExLens D D Para Para V V
 affine m = ExLens fw bw
   where
     fw :: (Para, V) -> ((V, V), D)
@@ -99,7 +99,7 @@ affine m = ExLens fw bw
                       , scale da w) -- da/ds
 
 -- Neuron with m inputs and one output with tanh activation
-neuron :: Int -> ExLens Para Para V V D D
+neuron :: Int -> ExLens D D Para Para V V
 neuron m = composeR (affine m) activ
 
 -- Initialize parameters for an affine lens from an infinite stream
@@ -110,7 +110,7 @@ initPara m stm = (Para w b, stm'')
     ([b], stm'') = splitAt 1 stm'
 
 -- A layer of nOut identical neurons, each with mIn inputs
-layer :: Int -> Int -> ExLens [Para] [Para] V V V V
+layer :: Int -> Int -> ExLens V V [Para] [Para] V V
 layer nOut mIn = composeL (branch nOut) (vecLens nOut (neuron mIn))
 
 -- Initialize a block of nOut parameters, each for a neuron with mIn inputs

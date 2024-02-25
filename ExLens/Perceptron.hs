@@ -6,7 +6,7 @@ import NNet
 -- The first layer contains neurons with mIn inputs each
 -- The list [Int] specifies the number of neurons in each layer (staring with the first layer)
 -- Each neuron has one output
-makeMlp :: Int -> [Int] -> ExLens  [[Para]] [[Para]] V V V V
+makeMlp :: Int -> [Int] -> ExLens V V [[Para]] [[Para]] V V
 makeMlp mIn [nOut] = singleParas $ layer mIn nOut
 makeMlp mIn (n1 : n2 : ns) = consParas $ compose ly mlp 
   where ly = layer mIn n1
