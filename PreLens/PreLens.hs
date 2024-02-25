@@ -33,6 +33,22 @@ idPreLens :: PreLens a da () () () () a da
 idPreLens = PreLens id id
 
 
+-- Parallel composition 
+
+-- A pair of lenses in parallel
+prodLens ::
+    PreLens a da m dm p dp s ds -> PreLens a' da' m' dm' p' dp' s' ds' ->
+    PreLens (a, a') (da, da') (m, m') (dm, dm') (p, p') (dp, dp') (s, s') (ds, ds')
+prodLens (PreLens f1 g1) (PreLens f2 g2) = PreLens  f3 g3
+  where
+    f3 ((p, p'), (s, s')) = ((m, m'), (a, a'))
+      where (m, a)   = f1 (p, s)
+            (m', a') = f2 (p', s')
+    g3 ((dm, dm'), (da, da')) = ((dp, dp'), (ds, ds'))
+      where
+        (dp, ds)   = g1 (dm, da)
+        (dp', ds') = g2 (dm', da')
+
 -- An existential lens is a trace over m of a PreLens
 -- The tracing can be done after all the compositions
 
@@ -55,19 +71,6 @@ composeL (ExLens pl) (ExLens pl') = ExLens $ preCompose pl pl'
 
 type ParaLens a da p dp s ds = (p, s) -> (da -> (dp, ds), a)
 
--- van Laarhoven representation of parametric lens
-type VanL a da p dp s ds = forall f. Functor f => 
-  (a -> f da) -> (p, s) -> f (dp, ds)
-
-toVLL :: ParaLens a da p dp s ds -> VanL a da p dp s ds
-toVLL para f = fmap (uncurry ($)) . strength . second f . para
-
-fromVLL :: VanL a da p dp s ds -> ParaLens a da p dp s ds
-fromVLL vll = unF . vll (curry MkF id)
-
-newtype F a da x = MkF { unF :: (da -> x, a) }
-  deriving Functor
-
 -- Monoidal category structure maps
 lunit  :: ((), a) -> a
 lunit ((), a) = a
@@ -82,9 +85,6 @@ assoc :: ((a, b), c) -> (a, (b, c))
 assoc ((a, b), c) = (a, (b, c))
 unAssoc :: (a, (b, c)) -> ((a, b), c)
 unAssoc (a, (b, c))= ((a, b), c)
-
-strength :: Functor f => (a, f b) -> f (a, b)
-strength (a, fb) = fmap (a,) fb
 
 -- Symmetric monoidal structure maps
 

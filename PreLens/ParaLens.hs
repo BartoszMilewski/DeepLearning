@@ -3,13 +3,13 @@ import Data.Bifunctor ( Bifunctor(second, first, bimap) )
 
 -- Parametric lenses and BiTambara modules
 
--- Parametric lens
+-- Parametric lens, get/set or forward/backward representation
 data PLens a da p dp s ds = 
   PLens { fwd' :: (p, s) -> a
         , bwd' :: (p, s, da) -> (dp, ds)
         } 
 
--- Existential parametic lens
+-- Existential representation of parametic lens
 data ExLens a da p dp s ds = 
   forall m . ExLens ((p, s)  -> (m, a))  
                     ((m, da) -> (dp, ds))
@@ -54,6 +54,22 @@ prodLens (ExLens f1 g1) (ExLens f2 g2) = ExLens  f3 g3
       where
         (dp, ds)   = g1 (m, da)
         (dp', ds') = g2 (m', da')
+
+-- van Laarhoven representation of parametric lens
+-- Not very useful, as it doesn't compose nicely
+type VanL a da p dp s ds = forall f. Functor f => 
+  (a -> f da) -> (p, s) -> f (dp, ds)
+
+type ParaLens a da p dp s ds = (p, s) -> (da -> (dp, ds), a)
+
+toVLL :: ParaLens a da p dp s ds -> VanL a da p dp s ds
+toVLL para f = fmap (uncurry ($)) . strength . second f . para
+
+fromVLL :: VanL a da p dp s ds -> ParaLens a da p dp s ds
+fromVLL vll = unF . vll (curry MkF id)
+
+newtype F a da x = MkF { unF :: (da -> x, a) }
+  deriving Functor
 
 -- Profunctor representation
 
@@ -105,3 +121,6 @@ unLunit a = ((), a)
 -- Conversion from ExLens to BiLens
 toTamb :: ExLens a da q q' s ds -> BiLens q q' s ds a da
 toTamb (ExLens fw bw) = beta . dimap fw bw . alpha
+
+strength :: Functor f => (a, f b) -> f (a, b)
+strength (a, fb) = fmap (a,) fb
