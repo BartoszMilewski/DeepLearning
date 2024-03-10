@@ -73,6 +73,14 @@ newtype F a da x = MkF { unF :: (da -> x, a) }
 
 -- Profunctor representation
 
+-- As a reminder, this is the vanilla Tambara module
+class Profunctor p where
+  dimapVanilla :: (a' -> a) -> (b -> b') -> p a b -> p a' b'
+
+class  Profunctor p => Tambara p where
+  alphaVanilla :: forall a da m. p a da -> p (m, a) (m, da)
+--
+
 class BiProfunctor p where
     dimap  :: (a' -> a) -> (b -> b') -> p q q' a b -> p q q' a' b'
     dimap' :: (r -> q) -> (q' -> r') -> p q q' a b -> p r r' a b

@@ -69,7 +69,7 @@ main = do
     let ys = fmap singleton [1, -1, -1, 1]
     let rate = 0.5
     let (para, _) = initParaMlp 3 [4, 4, 1] rands
-    paras <- iterateM 25 (testLearning mlp rate xs ys) para 
+    paras <- iterateM 10 (testLearning mlp rate xs ys) para 
     return ()
   where
     mlp :: TriLens V V [[((V, V), D)]] [[((V, V), D)]] [[Para]] [[Para]] V V

@@ -5,8 +5,7 @@ type V = [D]
 
 -- Parameters for a single neuron
 data Para = Para
-  {
-    bias   :: D
+  { bias   :: D
   , weight :: V
   } deriving Show
 

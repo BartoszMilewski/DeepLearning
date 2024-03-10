@@ -109,13 +109,13 @@ instance (Trimbara t) => Trimbara (PLeft t m dm p dp s ds) where
       dimapS unAssoc assoc . -- (m, m') (p, p') (p1, (s, s'))
       unPLeft -- (m, m') (p, p') ((p1, s), s')
 
-prodLens :: TriLens a da m dm p  dp  s  ds -> 
-            TriLens a' da' m' dm' p' dp' s' ds' ->
-            TriLens (a, a') (da, da') (m, m') (dm, dm') (p, p') (dp, dp') (s, s') (ds, ds')
+prodLensT :: TriLens a da m dm p  dp  s  ds -> 
+             TriLens a' da' m' dm' p' dp' s' ds' ->
+             TriLens (a, a') (da, da') (m, m') (dm, dm') (p, p') (dp, dp') (s, s') (ds, ds')
           -- l1 :: m1 p1 a    -> (m, m1) (p1, p) s
           -- l2 :: m1' p1' a' -> (m', m1') (p1', p') s'
           -- l3 :: m1 p1 (a, a') -> ((m, m'), m1) (p1, (p, p')) (s, s')
-prodLens l1 l2 = 
+prodLensT l1 l2 = 
   dimapP unAssoc assoc .   -- ((m, m'), m1) (p1, (p, p')) (s, s')
   dimapM unAssoc assoc .   -- 
   dimapP (second unLunit) (second lunit) .  -- (m, (m', m1)) ((p1, p), p') (s, s')
@@ -149,7 +149,7 @@ consLens l1 l2 =
   dimapP (second unCons) (second cons) .
   dimapM (first cons) (first unCons) .
   dimapS unCons cons .
-  prodLens l1 l2 .  -- m3 p3 (a, [a]) -> ((m, [m]), m3) (p3, (p, [p]))(s, [s])
+  prodLensT l1 l2 .  -- m3 p3 (a, [a]) -> ((m, [m]), m3) (p3, (p, [p]))(s, [s])
   dimapS cons unCons
 
 cons :: (a, [a]) -> [a]

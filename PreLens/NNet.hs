@@ -16,8 +16,8 @@ linearL n = PreLens fw bw
     fw (p, s) = ((s, p), sumN n $ zipWith (*) p s)
     -- da/dp = s, da/ds = p
     bw :: ((V, V), D) -> (V, V)
-    bw ((s, p), da) = (fmap (da *) s  -- da/dp
-                      ,fmap (da *) p) -- da/ds
+    bw ((s, p), da) = (fmap (da *) s  -- da * da/dp
+                      ,fmap (da *) p) -- da * da/ds
 
 -- Add bias to input
 biasL :: PreLens D D () () D D D D
@@ -70,7 +70,8 @@ neuronT :: Int -> TriLens D D ((V, V), D) ((V, V), D) Para Para V V
 -- m1 p1 D -> (((V, V), D), m1) (p1, Para) V
 neuronT mIn = 
   dimapP (second (unLunit . unPara)) (second (mkPara . lunit)) .
-  triCompose (affineT mIn) activT
+  triCompose (dimapM (first runit) (first unRunit) .
+  triCompose (linearT mIn) biasT) activT
 
 -- Initialize parameters for an affine lens from an infinite stream
 initPara :: Int -> [D] -> (Para, [D])
